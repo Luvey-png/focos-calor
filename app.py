@@ -6,7 +6,7 @@ import pyarrow.parquet as pq
 from graficos import (
     grafico_mensual, grafico_calendario, grafico_anio_mes,
     grafico_comparacion_sensores, grafico_estacionalidad,
-    grafico_confianza, grafico_provincias,
+    grafico_confianza, grafico_provincias, cargar_oni, grafico_enso_mensual, grafico_enso_fases
 )
 
 st.set_page_config(page_title="Focos de calor - Argentina", layout="wide")
@@ -95,8 +95,8 @@ if df_f.empty:
     st.error("No hay detecciones con esos filtros.")
     st.stop()
 
-tab_mapa, tab_cal, tab_graf, tab_datos = st.tabs(
-    ["Mapa", "Calendario", "Gráficos", "Datos"]
+tab_mapa, tab_cal, tab_graf, tab_enso, tab_datos = st.tabs(
+    ["Mapa", "Calendario", "Gráficos", "El Niño / La Niña", "Datos"]
 )
 
 with tab_mapa:
@@ -151,6 +151,31 @@ with tab_graf:
         "confirmados."
     )
 
+with tab_enso:
+    st.subheader("El Niño / La Niña y actividad térmica")
+    ruta_oni = Path("data/oni.txt")
+    if not ruta_oni.exists():
+        st.warning("Falta el archivo data/oni.txt (índice ONI de NOAA).")
+    else:
+        rezago = st.slider(
+            "Retraso entre el clima y la actividad (meses)", 0, 6, 0,
+            help="El efecto de El Niño / La Niña puede tardar meses en notarse.",
+        )
+        oni = cargar_oni(str(ruta_oni), rezago)
+        st.plotly_chart(grafico_enso_mensual(df_f, oni), use_container_width=True)
+        st.plotly_chart(grafico_enso_fases(df_f, oni), use_container_width=True)
+        st.caption(
+            "Tip: para una serie consistente desde 2000, dejá solo MODIS en el "
+            "filtro de sensor; VIIRS empieza en 2012 y cambia el nivel de los conteos. "
+            "Probá también una región distinta: el efecto no es igual en todo el país."
+        )
+        st.info(
+            "Esto muestra asociación, no causa. El ONI mide la temperatura del Pacífico "
+            "ecuatorial. La actividad térmica también depende de quemas agrícolas, uso "
+            "del suelo, sequías locales y otros factores. No se aplicó ningún test "
+            "estadístico. Cada conteo es de detecciones térmicas, no de incendios confirmados."
+        )
+        
 with tab_datos:
     st.dataframe(df_f.head(5000))
     st.caption("Se muestran las primeras 5.000 filas.")

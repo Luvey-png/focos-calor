@@ -128,3 +128,88 @@ def grafico_provincias(df):
     return px.bar(c, x="detecciones", y="provincia", orientation="h",
                   title="Detecciones térmicas por provincia",
                   height=max(350, 24 * len(c)))
+
+ANIOS_SIN_DATO = (2005, 2010, 2016)  # vaciar con () cuando A1 entregue MODIS completo
+COLORES_FASE = {"El Niño": "#d62728", "La Niña": "#1f77b4", "Neutro": "#9e9e9e"}
+ORDEN_TRIM = ["DJF", "JFM", "FMA", "MAM", "AMJ", "MJJ",
+              "JJA", "JAS", "ASO", "SON", "OND", "NDJ"]
+
+
+def cargar_oni(ruta="data/oni.txt", rezago=0):
+    """Lee el índice de NOAA y clasifica cada mes en El Niño / La Niña / Neutro."""
+    d = pd.read_csv(ruta, sep=r"\s+")
+    if "SEAS" not in d.columns:
+        raise ValueError("Formato inesperado en oni.txt; revisá las primeras líneas.")
+    d = d[d["SEAS"].isin(ORDEN_TRIM)].reset_index(drop=True)
+    valor = pd.to_numeric(d.iloc[:, -1], errors="coerce")
+    centro = {s: i + 1 for i, s in enumerate(ORDEN_TRIM)}  # DJF -> enero, etc.
+    out = pd.DataFrame({
+        "fecha": pd.to_datetime(dict(
+            year=pd.to_numeric(d["YR"]), month=d["SEAS"].map(centro), day=1)),
+        "oni": valor,
+    }).sort_values("fecha").reset_index(drop=True)
+
+    out["fase"] = "Neutro"
+    for signo, nombre in ((1, "El Niño"), (-1, "La Niña")):
+        cond = (signo * out["oni"]) >= 0.5
+        grupo = (cond != cond.shift()).cumsum()
+        largo = cond.groupby(grupo).transform("sum")
+        out.loc[cond & (largo >= 5), "fase"] = nombre
+
+    if rezago:
+        out["fecha"] = out["fecha"] + pd.DateOffset(months=rezago)
+    return out
+
+
+def _conteo_mensual(df):
+    mes = df["fecha"].dt.to_period("M").dt.to_timestamp()
+    c = mes.value_counts().sort_index().astype(float)
+    c = c.reindex(pd.date_range(c.index.min(), c.index.max(), freq="MS"), fill_value=0)
+    c[c.index.year.isin(ANIOS_SIN_DATO)] = float("nan")  # ausencia de dato, no cero
+    return c.rename_axis("fecha").rename("detecciones").reset_index()
+
+
+def grafico_enso_mensual(df, oni):
+    """Serie mensual de detecciones con bandas de El Niño / La Niña."""
+    c = _conteo_mensual(df)
+    fig = px.line(c, x="fecha", y="detecciones",
+                  title="Detecciones mensuales y fases de El Niño / La Niña")
+    o = oni[(oni["fecha"] >= c["fecha"].min()) & (oni["fecha"] <= c["fecha"].max())]
+    o = o.reset_index(drop=True)
+    grupo = (o["fase"] != o["fase"].shift()).cumsum()
+    for _, t in o.groupby(grupo):
+        fase = t["fase"].iloc[0]
+        if fase == "Neutro":
+            continue
+        x1 = t["fecha"].iloc[-1] + pd.DateOffset(months=1)
+        fig.add_vrect(
+            x0=t["fecha"].iloc[0].strftime("%Y-%m-%d"), x1=x1.strftime("%Y-%m-%d"),
+            fillcolor=COLORES_FASE[fase], opacity=0.18, line_width=0, layer="below",
+        )
+    for fase in ("El Niño", "La Niña"):  # leyenda de las bandas
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None], mode="markers", name=fase,
+            marker=dict(size=10, color=COLORES_FASE[fase])))
+    fig.update_layout(height=420, legend_title_text="")
+    return fig
+
+
+def grafico_enso_fases(df, oni):
+    """Actividad relativa por fase. 1 = lo típico para ese mes del año
+    (así se descuenta la estacionalidad)."""
+    c = _conteo_mensual(df).dropna().copy()
+    c["mes"] = c["fecha"].dt.month
+    c["indice"] = c["detecciones"] / c.groupby("mes")["detecciones"].transform("mean")
+    c = c.merge(oni[["fecha", "fase"]], on="fecha", how="inner")
+    n = c["fase"].value_counts()
+    c["etiqueta"] = c["fase"].map(lambda f: f"{f} (n={n[f]} meses)")
+    orden = [f"{f} (n={n[f]} meses)" for f in ("El Niño", "Neutro", "La Niña") if f in n]
+    fig = px.box(
+        c, x="etiqueta", y="indice", color="fase", points="all",
+        color_discrete_map=COLORES_FASE, category_orders={"etiqueta": orden},
+        title="Actividad relativa según la fase (1 = típico para ese mes)",
+        labels={"etiqueta": "", "indice": "Actividad relativa"},
+    )
+    fig.add_hline(y=1, line_dash="dash")
+    fig.update_layout(showlegend=False, height=450)
+    return fig
