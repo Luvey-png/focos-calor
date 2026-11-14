@@ -3,7 +3,10 @@ from pathlib import Path
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from graficos import grafico_mensual, grafico_calendario, grafico_anio_mes
+from graficos import (
+    grafico_mensual, grafico_calendario, grafico_anio_mes,
+    grafico_comparacion_sensores, grafico_estacionalidad, grafico_confianza,
+)
 
 st.set_page_config(page_title="Focos de calor - Argentina", layout="wide")
 
@@ -49,12 +52,28 @@ if isinstance(rango, (list, tuple)) and len(rango) == 2:
 else:
     desde, hasta = fmin, fmax
 
+REGIONES = {
+    "Toda Argentina": None,
+    "Noroeste (aprox.)": (-29.5, -21.7, -69.0, -62.0),
+    "Noreste (aprox.)": (-29.5, -21.7, -62.0, -53.6),
+    "Centro / Cuyo (aprox.)": (-35.5, -29.5, -70.5, -61.0),
+    "Pampa (aprox.)": (-40.0, -33.0, -64.0, -57.0),
+    "Patagonia (aprox.)": (-55.1, -40.0, -73.6, -62.0),
+    "San Luis (aprox.)": (-36.0, -31.8, -67.5, -64.7),
+}
+region = st.sidebar.selectbox("Región", list(REGIONES.keys()))
+
 # Un único DataFrame filtrado que alimenta TODO lo demás
-df_f = df[
+mask = (
     df["sensor"].isin(sensores)
     & (df["fecha"].dt.date >= desde)
     & (df["fecha"].dt.date <= hasta)
-]
+)
+caja = REGIONES[region]
+if caja is not None:
+    lat_min, lat_max, lon_min, lon_max = caja
+    mask &= df["latitud"].between(lat_min, lat_max) & df["longitud"].between(lon_min, lon_max)
+df_f = df[mask]
 
 st.sidebar.write(f"Detecciones mostradas: **{len(df_f)}** de {len(df)}")
 
@@ -99,10 +118,22 @@ with tab_cal:
     st.caption(
         "Cada valor es un conteo de detecciones térmicas, no de incendios confirmados."
     )
-    
+
 with tab_graf:
     st.subheader("Comparación de sensores")
+    st.plotly_chart(grafico_comparacion_sensores(df_f), use_container_width=True)
     st.plotly_chart(grafico_mensual(df_f), use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(grafico_estacionalidad(df_f), use_container_width=True)
+    with col2:
+        st.plotly_chart(grafico_confianza(df_f), use_container_width=True)
+    st.info(
+        "Los sensores no son directamente comparables en cantidad: VIIRS tiene "
+        "mayor resolución y detecta focos más pequeños que MODIS. Además, VIIRS "
+        "cubre desde 2012 y MODIS desde 2000. Cada conteo es de detecciones "
+        "térmicas, no de incendios confirmados."
+    )
 
 with tab_datos:
     st.dataframe(df_f)

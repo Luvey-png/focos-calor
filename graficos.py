@@ -77,3 +77,46 @@ def grafico_anio_mes(df):
     )
     fig.update_layout(height=max(350, 22 * len(t)))
     return fig
+
+def grafico_comparacion_sensores(df):
+    """MODIS vs VIIRS: detecciones por año, una barra por sensor."""
+    d = pd.DataFrame({"anio": df["fecha"].dt.year, "sensor": df["sensor"].astype(str)})
+    conteo = d.groupby(["anio", "sensor"]).size().reset_index(name="detecciones")
+    fig = px.bar(
+        conteo, x="anio", y="detecciones", color="sensor", barmode="group",
+        title="Detecciones por año y sensor",
+        labels={"anio": "Año", "detecciones": "Detecciones"},
+    )
+    fig.update_xaxes(dtick=1)
+    return fig
+
+
+def grafico_estacionalidad(df):
+    """Detecciones por mes del año (todos los años juntos), por sensor.
+    Muestra en qué época del año hay más actividad."""
+    d = pd.DataFrame({"mes": df["fecha"].dt.month, "sensor": df["sensor"].astype(str)})
+    conteo = d.groupby(["mes", "sensor"]).size().reset_index(name="detecciones")
+    conteo["mes_nombre"] = conteo["mes"].map(lambda m: MESES[m - 1])
+    fig = px.line(
+        conteo, x="mes_nombre", y="detecciones", color="sensor", markers=True,
+        category_orders={"mes_nombre": MESES},
+        title="Estacionalidad: detecciones por mes del año",
+        labels={"mes_nombre": "Mes", "detecciones": "Detecciones"},
+    )
+    return fig
+
+def grafico_confianza(df):
+    """Distribución de confianza por sensor (en porcentaje)."""
+    d = pd.DataFrame({
+        "sensor": df["sensor"].astype(str),
+        "confianza": df["confianza"].astype(str),
+    })
+    conteo = d.groupby(["sensor", "confianza"]).size().reset_index(name="n")
+    conteo["porcentaje"] = conteo["n"] / conteo.groupby("sensor")["n"].transform("sum") * 100
+    fig = px.bar(
+        conteo, x="sensor", y="porcentaje", color="confianza",
+        category_orders={"confianza": ["baja", "nominal", "alta", "desconocida"]},
+        title="Distribución de confianza por sensor (%)",
+        labels={"porcentaje": "% de detecciones"},
+    )
+    return fig
