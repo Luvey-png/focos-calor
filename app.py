@@ -24,8 +24,8 @@ COLUMNAS = [
 ]
 
 
-@st.cache_resource  # no copia el DataFrame en cada clic; NO modificarlo afuera
-def cargar_datos():
+@st.cache_resource
+def cargar_datos(version):
     ruta = Path("data/focos_real.parquet")
     if ruta.exists():
         disponibles = pq.read_schema(ruta).names
@@ -41,7 +41,8 @@ def cargar_datos():
     return df
 
 
-df = cargar_datos()
+_ruta = Path("data/focos_real.parquet")
+df = cargar_datos(_ruta.stat().st_mtime if _ruta.exists() else 0)
 
 if df["es_prueba"].any():
     st.info("Estás viendo datos de PRUEBA, no datos reales.")
