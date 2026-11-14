@@ -120,3 +120,11 @@ def grafico_confianza(df):
         labels={"porcentaje": "% de detecciones"},
     )
     return fig
+
+def grafico_provincias(df):
+    """Detecciones por provincia."""
+    c = (df.groupby("provincia", observed=True).size()
+         .reset_index(name="detecciones").sort_values("detecciones"))
+    return px.bar(c, x="detecciones", y="provincia", orientation="h",
+                  title="Detecciones térmicas por provincia",
+                  height=max(350, 24 * len(c)))
