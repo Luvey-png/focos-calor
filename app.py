@@ -3,7 +3,7 @@ from pathlib import Path
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from graficos import grafico_mensual
+from graficos import grafico_mensual, grafico_calendario, grafico_anio_mes
 
 st.set_page_config(page_title="Focos de calor - Argentina", layout="wide")
 
@@ -63,7 +63,9 @@ if df_f.empty:
     st.error("No hay detecciones con esos filtros.")
     st.stop()
 
-tab_mapa, tab_graf, tab_datos = st.tabs(["Mapa", "Gráficos", "Datos"])
+tab_mapa, tab_cal, tab_graf, tab_datos = st.tabs(
+    ["Mapa", "Calendario", "Gráficos", "Datos"]
+)
 
 with tab_mapa:
     st.subheader("Mapa de detecciones térmicas")
@@ -88,6 +90,16 @@ with tab_mapa:
     fig_mapa.update_layout(map_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
     st.plotly_chart(fig_mapa, use_container_width=True)
 
+with tab_cal:
+    st.subheader("Calendario de actividad térmica")
+    anios = sorted(df_f["fecha"].dt.year.unique(), reverse=True)
+    anio = st.selectbox("Año", anios)
+    st.plotly_chart(grafico_calendario(df_f, anio), use_container_width=True)
+    st.plotly_chart(grafico_anio_mes(df_f), use_container_width=True)
+    st.caption(
+        "Cada valor es un conteo de detecciones térmicas, no de incendios confirmados."
+    )
+    
 with tab_graf:
     st.subheader("Comparación de sensores")
     st.plotly_chart(grafico_mensual(df_f), use_container_width=True)
