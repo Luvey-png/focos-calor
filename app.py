@@ -1,12 +1,13 @@
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from graficos import grafico_mensual
 
-st.set_page_config(page_title="Focos de calor - San Luis", layout="wide")
+st.set_page_config(page_title="Focos de calor - Argentina", layout="wide")
 
-st.title("Focos de calor - San Luis")
-
+st.title("Focos de calor - Argentina")
 st.warning(
     "⚠️ Un foco de calor NO es un incendio confirmado. "
     "Es una detección térmica satelital que puede tener otras causas. "
@@ -16,6 +17,9 @@ st.warning(
 
 @st.cache_data
 def cargar_datos():
+    ruta = Path("data/focos_real.parquet")
+    if ruta.exists():
+        return pd.read_parquet(ruta)
     return pd.read_csv("data/focos_prueba.csv", parse_dates=["fecha"])
 
 
@@ -63,13 +67,22 @@ tab_mapa, tab_graf, tab_datos = st.tabs(["Mapa", "Gráficos", "Datos"])
 
 with tab_mapa:
     st.subheader("Mapa de detecciones térmicas")
+    MAX_PUNTOS = 20000
+    df_mapa = df_f
+    if len(df_f) > MAX_PUNTOS:
+        df_mapa = df_f.sample(MAX_PUNTOS, random_state=1)
+        st.caption(
+            f"Se muestran {MAX_PUNTOS:,} puntos al azar de {len(df_f):,}. "
+            "Acotá fechas o sensor para ver más detalle."
+        )
     fig_mapa = px.scatter_map(
-        df_f,
+        df_mapa,
         lat="latitud",
         lon="longitud",
         color="sensor",
         hover_data=["fecha", "confianza", "fuente"],
-        zoom=7,
+        zoom=3.5,
+        center={"lat": -38.5, "lon": -64.0},
         height=550,
     )
     fig_mapa.update_layout(map_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
