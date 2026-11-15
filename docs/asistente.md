@@ -54,6 +54,9 @@ a `LUGARES`, así que también aparecen en "Cerca de mí".
 
 ## 3. Configuración
 
+> **Paso a paso** (conseguir la clave, crear el archivo, probar y publicar):
+> ver [`guia-paso-a-paso.md`](guia-paso-a-paso.md).
+
 El asistente funciona con **Anthropic (Claude), Google (Gemini) u OpenAI**. Se
 configura en `.streamlit/secrets.toml`, que ya está en `.gitignore`:
 
