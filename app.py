@@ -15,6 +15,7 @@ from extras import (
 )
 from estilo import NOMBRE, ICONO, aplicar_estilo, encabezado
 import armonizacion as arm
+import asistente as ia
 
 st.set_page_config(
     page_title=f"{NOMBRE} · Focos de calor",
@@ -71,6 +72,11 @@ df = cargar_datos(_version)
 def preparar_armonizacion(_df, version):
     m = arm.tabla_mensual(_df)
     return m, arm.armonizar(m), arm.validar(m)
+
+
+@st.cache_resource
+def preparar_asistente(_df, _h_arm, version):
+    return ia.resumen_provincias(_h_arm, _df), ia.resumen_lugares(_df)
 encabezado(df)
 
 if df["es_prueba"].any():
@@ -132,11 +138,79 @@ if df_f.empty:
     st.error("No hay detecciones con esos filtros.")
     st.stop()
 
-(tab_mapa, tab_cal, tab_arm, tab_graf, tab_enso, tab_gases, tab_cerca,
+(tab_ia, tab_mapa, tab_cal, tab_arm, tab_graf, tab_enso, tab_gases, tab_cerca,
  tab_origen, tab_quemas, tab_metodo, tab_datos) = st.tabs([
-    "Mapa", "Calendario", "Armonización", "Gráficos", "El Niño / La Niña", "Gases de carbono",
+    "Asistente IA", "Mapa", "Calendario", "Armonización", "Gráficos", "El Niño / La Niña", "Gases de carbono",
     "Cerca de mí", "Origen (inferido)", "Quemas", "Método y fuentes", "Datos",
 ])
+
+with tab_ia:
+    st.subheader("Asistente de Igneus")
+    st.caption(
+        "Preguntá en lenguaje simple. El asistente responde solo con los datos de la app "
+        "(serie armonizada, meses críticos, anomalías y actividad reciente). Usa los "
+        "filtros de provincia y fechas de la barra lateral. No es una alerta oficial: "
+        "ante un incendio, llamá al 100 o al 911."
+    )
+    _m, _h, (_val, _, _) = preparar_armonizacion(df, _version)
+    _tprov, _tlug = preparar_asistente(df, _h, _version)
+    datos_ia = ia.contexto(_h, df, provincias, desde, hasta, _tprov, _tlug, _val)
+    proveedor, clave_ia, modelo_ia = ia.configuracion(st.secrets)
+
+    if "chat" not in st.session_state:
+        st.session_state.chat = []
+
+    if proveedor is None:
+        st.warning(
+            "Modo sin IA: falta configurar la clave del proveedor en "
+            "`.streamlit/secrets.toml` (ver docs/asistente.md). Mientras tanto se "
+            "muestra un resumen automático del área seleccionada."
+        )
+        st.markdown(ia.resumen_sin_ia(_h, df, provincias, desde, hasta, _tprov))
+    else:
+        cols = st.columns(len(ia.PREGUNTAS_EJEMPLO) + 1)
+        pedido = None
+        for i, q in enumerate(ia.PREGUNTAS_EJEMPLO):
+            if cols[i].button(q, key=f"ej_{i}", use_container_width=True):
+                pedido = q
+        if cols[-1].button("📋 Informe semanal para brigadas", use_container_width=True):
+            pedido = ia.PEDIDO_INFORME
+
+        for msg in st.session_state.chat:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["visible"] if "visible" in msg else msg["content"])
+
+        escrita = st.chat_input("Ej.: ¿Cuándo es más peligroso el fuego en Córdoba?")
+        pregunta = escrita or pedido
+        if pregunta:
+            visible = ("Informe semanal para brigadas" if pregunta == ia.PEDIDO_INFORME
+                       else pregunta)
+            with st.chat_message("user"):
+                st.markdown(visible)
+            with st.chat_message("assistant"):
+                with st.spinner("Consultando los datos..."):
+                    try:
+                        resp = ia.responder(pregunta, st.session_state.chat, datos_ia,
+                                            proveedor, clave_ia, modelo_ia)
+                    except Exception as e:
+                        resp = None
+                        st.error(f"No se pudo consultar al modelo ({type(e).__name__}). "
+                                 "Revisá la clave, el modelo o la conexión.")
+                if resp:
+                    st.markdown(resp)
+            if resp:
+                st.session_state.chat += [
+                    {"role": "user", "content": pregunta, "visible": visible},
+                    {"role": "assistant", "content": resp},
+                ]
+        if st.session_state.chat and st.button("Borrar conversación"):
+            st.session_state.chat = []
+            st.rerun()
+        st.caption(f"Modelo: {proveedor} · {modelo_ia}. Respuestas generadas con IA: "
+                   "verificalas con los gráficos de la app.")
+
+    with st.expander("Ver los datos que usa el asistente"):
+        st.text(datos_ia)
 
 with tab_mapa:
     st.subheader("Mapa de detecciones térmicas")
@@ -240,7 +314,8 @@ with tab_arm:
             "detecciones de Aqua en ese mes; se usa el factor anual de la provincia."
         )
     st.info(
-        "Cómo se arma la serie: desde 2012 se usa lo observado por VIIRS S-NPP. Entre "
+        "Cómo se arma la serie: desde 2012 se usa lo observado por VIIRS S-NPP (si en un "
+        "mes S-NPP no tiene datos, se estima desde NOAA-20 o NOAA-21). Entre "
         "2002 y 2011 se estima desde MODIS Aqua, que pasa a la misma hora que S-NPP "
         "(~13:30), con un factor por provincia y mes calculado en 2012-2025. En 2000-2001 "
         "solo hay MODIS Terra: se lleva a Aqua y después a S-NPP (más incertidumbre). Los años sin datos de "

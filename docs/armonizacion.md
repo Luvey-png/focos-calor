@@ -30,14 +30,19 @@ Toda la serie se lleva a una escala común: **equivalente VIIRS S-NPP**.
 
 1. **2012 en adelante:** se usa lo observado por VIIRS S-NPP. Es un solo satélite,
    así que la serie es consistente y no le afectan NOAA-20 ni NOAA-21.
+   Si en un mes S-NPP no tiene datos suficientes (pasa en los datos recientes de
+   2026), se estima desde **VIIRS NOAA-20** y, si tampoco hay, desde **NOAA-21**,
+   con un factor S-NPP/NOAA por provincia y mes calculado en los meses en que
+   coinciden. El factor de NOAA-21 tiene más incertidumbre porque solo hay pocos
+   meses en común (agosto a octubre de 2026).
 2. **2002–2011:** se estima S-NPP a partir de MODIS Aqua.
    `S-NPP estimado = Aqua × factor(provincia, mes)`
    - Aqua y S-NPP pasan a la misma hora (~13:30 local), así que ven el mismo ciclo
      diario del fuego.
    - El factor es `Σ S-NPP / Σ Aqua` en los años completos en que funcionan los
-     dos (2012–2025, sin 2016, que no tiene Aqua).
+     dos (hoy: 2013–2015, 2017–2021, 2023 y 2025).
    - Se calcula por provincia y mes del año, porque cambia según el tipo de fuego y
-     la estación (por ejemplo, San Luis: 3,5 en julio y 7,9 en diciembre).
+     la estación (por ejemplo, San Luis: 3,4 en julio y 8,3 en diciembre).
    - Si una provincia tiene menos de 20 detecciones de Aqua en ese mes, se usa el
      factor anual de la provincia, y si no alcanza, el nacional (~5,4).
 3. **2000–2001:** solo hay MODIS Terra. Se lleva a Aqua con un factor Aqua/Terra
@@ -48,21 +53,25 @@ Toda la serie se lleva a una escala común: **equivalente VIIRS S-NPP**.
    No se usa para calcular factores ni para validar.
 
 Se cuentan las detecciones de cada satélite por separado (sin quitar duplicados),
-agrupadas por año, mes y provincia. Un mes sin detecciones cuenta como cero real
-solo si el satélite estaba funcionando ese mes.
+agrupadas por año, mes y provincia. Un satélite se considera **disponible** en un
+mes si tiene datos en al menos el 70 % de los días que cubre la base ese mes. Así,
+por ejemplo, S-NPP en noviembre de 2026 (2 días de 14) no cuenta como dato y se usa
+NOAA-20. Un mes sin detecciones en una provincia cuenta como cero real solo si el
+satélite estaba disponible.
 
 ## 3. Validación
 
 Para saber si el método funciona, se calculan los factores **solo con 2012–2018**
-y se estima S-NPP de **2019–2025** a partir de Aqua, años que el método no vio.
+y se estima S-NPP de **2019–2025** a partir de Aqua, años que el método no vio
+(se usan los años completos: 2019, 2020, 2021, 2023 y 2025).
 Después se compara con lo que S-NPP observó de verdad. El error es la mediana del
 error relativo.
 
 | Método                                    | Error mensual (país) | Error anual por provincia |
 |-------------------------------------------|----------------------|---------------------------|
-| **Factor por provincia y mes (el nuestro)** | **8,2 %**            | **12,8 %**                |
-| Factor único nacional                     | 25,1 %               | 15,1 %                    |
-| Sumar todos los satélites (sin armonizar) | 126 %                | 128 %                     |
+| **Factor por provincia y mes (el nuestro)** | **7,3 %**            | **12,0 %**                |
+| Factor único nacional                     | 23,2 %               | 13,8 %                    |
+| Sumar todos los satélites (sin armonizar) | 126 %                | 127 %                     |
 
 Para el error mensual se usan los meses con al menos 100 detecciones, y para el
 anual por provincia, las provincias con al menos 200 detecciones en el año.

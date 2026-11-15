@@ -12,6 +12,8 @@ Sumar todo genera saltos artificiales.
 Método: llevar todo a una escala común, "equivalente VIIRS S-NPP".
   1. 2012 en adelante: se usa lo observado por VIIRS S-NPP (un solo satélite,
      serie consistente).
+  1b. Meses sin S-NPP (por ejemplo, en los datos recientes): se estima desde
+     VIIRS NOAA-20 o NOAA-21 con un factor S-NPP/NOAA por provincia y mes.
   2. 2002-2011: se estima S-NPP a partir de MODIS Aqua. Aqua y S-NPP pasan a la
      misma hora (~13:30 local), así que ven el mismo ciclo diario del fuego.
      El factor S-NPP/Aqua se calcula por provincia y mes del año con los años en
@@ -37,24 +39,32 @@ MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "
 
 
 # ---------- Tabla base ----------
+SATELITES = (SAT_REF, "N20", "N21", SAT_PUENTE, SAT_VIEJO)
+COBERTURA_MIN = 0.7  # un satélite "está" en un mes si tiene datos en >= 70 % de los días
+
+
 def tabla_mensual(df):
     """Conteos por año, mes, provincia y satélite (sin quitar duplicados:
-    cada satélite se cuenta por separado)."""
+    cada satélite se cuenta por separado) y disponibilidad de cada satélite."""
     d = pd.DataFrame({
         "anio": df["fecha"].dt.year.astype("int16"),
         "mes": df["fecha"].dt.month.astype("int8"),
+        "dia": df["fecha"].dt.day.astype("int8"),
         "provincia": df["provincia"].astype(str),
         "satelite": df["satelite"].astype(str),
     })
     m = d.groupby(["anio", "mes", "provincia", "satelite"]).size().unstack("satelite", fill_value=0)
-    for s in (SAT_REF, SAT_PUENTE, SAT_VIEJO):
+    for s in SATELITES:
         if s not in m.columns:
             m[s] = 0
-    # disponibilidad de cada satélite por año y mes (a nivel país)
-    disp = d.groupby(["anio", "mes", "satelite"]).size().unstack("satelite", fill_value=0) > 0
-    for s in (SAT_REF, SAT_PUENTE, SAT_VIEJO):
-        if s not in disp.columns:
-            disp[s] = False
+    # disponibilidad: días con datos de cada satélite, contra los días que cubre la
+    # base ese mes (así un satélite con 2 días de datos en un mes no cuenta como dato)
+    dias = d.groupby(["anio", "mes", "satelite"])["dia"].nunique().unstack("satelite", fill_value=0)
+    for s in SATELITES:
+        if s not in dias.columns:
+            dias[s] = 0
+    total = d.groupby(["anio", "mes"])["dia"].nunique()
+    disp = dias[list(SATELITES)].ge(total * COBERTURA_MIN, axis=0) & (dias[list(SATELITES)] > 0)
     # grilla completa: un mes sin detecciones en una provincia es un cero real
     # si el satélite estaba funcionando ese mes
     provs = sorted(d["provincia"].unique())
@@ -62,21 +72,25 @@ def tabla_mensual(df):
         [disp.index.get_level_values(0).unique(), range(1, 13), provs],
         names=["anio", "mes", "provincia"])
     m = m.reindex(idx, fill_value=0).reset_index()
-    m = m.join(disp[[SAT_REF, SAT_PUENTE, SAT_VIEJO]].add_prefix("hay_"), on=["anio", "mes"])
-    for s in (SAT_REF, SAT_PUENTE, SAT_VIEJO):
+    m = m.join(disp.add_prefix("hay_"), on=["anio", "mes"])
+    for s in SATELITES:
         m[f"hay_{s}"] = m[f"hay_{s}"].fillna(False).astype(bool)
     return m
 
 
 # ---------- Factores ----------
-def _factor(m, num, den, anios):
-    """Factor num/den por provincia y mes, con respaldo por provincia y nacional."""
-    t = m[m["anio"].isin(anios) & m[f"hay_{num}"] & m[f"hay_{den}"]]
+def _factor(m, num, den, anios=None):
+    """Factor num/den por provincia y mes, con respaldo por provincia y nacional.
+    Usa los meses en que los dos satélites están disponibles (y, si se indica,
+    solo esos años)."""
+    t = m[m[f"hay_{num}"] & m[f"hay_{den}"]]
+    if anios is not None:
+        t = t[t["anio"].isin(anios)]
     pm = t.groupby(["provincia", "mes"])[[num, den]].sum()
     local = (pm[num] / pm[den]).where(pm[den] >= MIN_DET)
     p = t.groupby("provincia")[[num, den]].sum()
     prov = (p[num] / p[den]).where(p[den] >= MIN_DET)
-    nac = t[num].sum() / max(t[den].sum(), 1)
+    nac = t[num].sum() / t[den].sum() if t[den].sum() > 0 else np.nan
     return local, prov, nac
 
 
@@ -103,29 +117,32 @@ def ajustar(m, anios_ref=None, anios_terra=None):
     return {
         "ref_aqua": _factor(m, SAT_REF, SAT_PUENTE, anios_ref),
         "aqua_terra": _factor(m, SAT_PUENTE, SAT_VIEJO, anios_terra),
+        # respaldos para meses sin S-NPP (por ejemplo, datos recientes)
+        "ref_n20": _factor(m, SAT_REF, "N20"),
+        "ref_n21": _factor(m, SAT_REF, "N21"),
     }
 
 
 def armonizar(m, factores=None):
-    """Agrega 'armonizado' (equivalente VIIRS S-NPP) y 'metodo' a la tabla mensual."""
+    """Agrega 'armonizado' (equivalente VIIRS S-NPP) y 'metodo' a la tabla mensual.
+    Orden de preferencia: S-NPP observado, NOAA-20, NOAA-21, Aqua, Terra."""
     if factores is None:
         factores = ajustar(m)
     m = m.copy()
     r_ra = _aplicar(m, factores["ref_aqua"])
     r_at = _aplicar(m, factores["aqua_terra"])
-    m["armonizado"] = np.select(
-        [m[f"hay_{SAT_REF}"], m[f"hay_{SAT_PUENTE}"], m[f"hay_{SAT_VIEJO}"]],
-        [m[SAT_REF], m[SAT_PUENTE] * r_ra, m[SAT_VIEJO] * r_at * r_ra],
-        default=np.nan,
-    )
-    m["metodo"] = np.select(
-        [m[f"hay_{SAT_REF}"], m[f"hay_{SAT_PUENTE}"], m[f"hay_{SAT_VIEJO}"]],
-        ["Observado (VIIRS S-NPP)", "Estimado desde MODIS Aqua", "Estimado desde MODIS Terra"],
-        default="Sin datos",
-    )
-    sats = [c for c in m.columns if c not in ("anio", "mes", "provincia", "armonizado", "metodo")
-            and not c.startswith("hay_")]
-    m["suma_cruda"] = m[sats].sum(axis=1)
+    r_20 = _aplicar(m, factores["ref_n20"])
+    r_21 = _aplicar(m, factores["ref_n21"])
+    casos = [
+        (m["hay_N"], m[SAT_REF], "Observado (VIIRS S-NPP)"),
+        (m["hay_N20"] & r_20.notna(), m["N20"] * r_20, "Estimado desde VIIRS NOAA-20"),
+        (m["hay_N21"] & r_21.notna(), m["N21"] * r_21, "Estimado desde VIIRS NOAA-21"),
+        (m[f"hay_{SAT_PUENTE}"], m[SAT_PUENTE] * r_ra, "Estimado desde MODIS Aqua"),
+        (m[f"hay_{SAT_VIEJO}"], m[SAT_VIEJO] * r_at * r_ra, "Estimado desde MODIS Terra"),
+    ]
+    m["armonizado"] = np.select([c for c, _, _ in casos], [v for _, v, _ in casos], default=np.nan)
+    m["metodo"] = np.select([c for c, _, _ in casos], [t for _, _, t in casos], default="Sin datos")
+    m["suma_cruda"] = m[[s for s in SATELITES if s in m.columns]].sum(axis=1)
     return m
 
 
@@ -138,7 +155,7 @@ def validar(m, corte=2018):
     f = _factor(entren, SAT_REF, SAT_PUENTE, entren["anio"].unique())
     prueba["pred_local"] = prueba[SAT_PUENTE] * _aplicar(prueba, f)
     prueba["pred_unico"] = prueba[SAT_PUENTE] * f[2]
-    prueba["suma_cruda"] = prueba[[c for c in ("Aqua", "Terra", "N", "N20", "N21") if c in prueba]].sum(axis=1)
+    prueba["suma_cruda"] = prueba[[c for c in SATELITES if c in prueba]].sum(axis=1)
 
     def errores(nivel, minimo):
         g = prueba.groupby(nivel)[[SAT_REF, "pred_local", "pred_unico", "suma_cruda"]].sum()

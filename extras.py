@@ -8,7 +8,8 @@ from graficos import _conteo_mensual, MESES
 LUGARES = {
     "Buenos Aires": (-34.60, -58.38), "Córdoba": (-31.42, -64.18),
     "Rosario": (-32.95, -60.65), "Mendoza": (-32.89, -68.84),
-    "San Luis": (-33.30, -66.34), "Salta": (-24.79, -65.41),
+    "San Luis": (-33.30, -66.34), "Villa Mercedes": (-33.68, -65.46),
+    "Merlo (San Luis)": (-32.34, -65.01), "Salta": (-24.79, -65.41),
     "San Miguel de Tucumán": (-26.82, -65.22), "Resistencia": (-27.46, -58.98),
     "Formosa": (-26.18, -58.17), "Corrientes": (-27.47, -58.83),
     "Posadas": (-27.37, -55.90), "Santiago del Estero": (-27.79, -64.26),
