@@ -148,7 +148,7 @@ def _plotly_en_espanol():
 def aplicar_estilo():
     st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
     px.defaults.color_discrete_sequence = [
-        "#F0FF1A", "#EC4134", "#FFB347", "#69DB7C", "#F06595", "#B197FC"]
+        "#E41AFF", "#11ECFC", "#FFB347", "#69DB7C", "#F06595", "#B197FC"]
     _plotly_en_espanol()
     img = _b64(LOGO)
     if img:
