@@ -22,7 +22,6 @@ st.set_page_config(
     page_icon=str(ICONO) if ICONO.exists() else "🔥",
     layout="wide",
 )
-aplicar_estilo()
 
 aplicar_estilo()
 
