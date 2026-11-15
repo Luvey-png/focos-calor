@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from graficos import _conteo_mensual, MESES
+from graficos import _conteo_mensual, meses
+from idioma import t, motivo_txt, senal_txt, fecha_txt
 
 # Coordenadas aproximadas de ciudades (se puede ampliar)
 LUGARES = {
@@ -24,6 +25,10 @@ LUGARES = {
 
 COLS_QUEMAS = ["provincia", "fecha_inicio", "fecha_fin", "latitud",
                "longitud", "radio_km", "fuente", "es_ejemplo"]
+
+
+def _conf_txt(x):
+    return t("g_conf_" + x) if x in ("baja", "nominal", "alta", "desconocida") else x
 
 
 # ---------- Cerca de un punto ----------
@@ -50,9 +55,12 @@ def mapa_cercano(recientes, lat0, lon0, radio_km, quemas=None):
     zoom = float(np.clip(11 - np.log2(max(radio_km, 1) / 2), 4, 11))
     centro = dict(lat=lat0, lon=lon0)
     if len(recientes):
+        recientes = recientes.assign(confianza=recientes["confianza"].astype(str).map(_conf_txt))
         fig = px.scatter_map(
             recientes, lat="latitud", lon="longitud", color="sensor",
             hover_data=["fecha", "dist_km", "confianza"], height=500,
+            labels={"sensor": t("g_sensor"), "fecha": t("g_fecha"),
+                    "dist_km": t("x_dist"), "confianza": t("g_confianza")},
         )
     else:
         fig = go.Figure()
@@ -61,14 +69,14 @@ def mapa_cercano(recientes, lat0, lon0, radio_km, quemas=None):
         lat=lat0 + (radio_km / 111.0) * np.sin(ang),
         lon=lon0 + (radio_km / (111.0 * np.cos(np.radians(lat0)))) * np.cos(ang),
         mode="lines", line=dict(width=2, color="black"),
-        name=f"Radio {radio_km} km", hoverinfo="skip"))
+        name=t("x_radio", radio=radio_km), hoverinfo="skip"))
     fig.add_trace(go.Scattermap(
         lat=[lat0], lon=[lon0], mode="markers",
-        marker=dict(size=14, color="black"), name="Tu punto", hoverinfo="name"))
+        marker=dict(size=14, color="black"), name=t("x_tupunto"), hoverinfo="name"))
     if quemas is not None and len(quemas):
         fig.add_trace(go.Scattermap(
             lat=quemas["latitud"], lon=quemas["longitud"], mode="markers",
-            marker=dict(size=12, color="green"), name="Quema declarada",
+            marker=dict(size=12, color="green"), name=t("x_quema"),
             text=quemas["fuente"].astype(str)))
     fig.update_layout(
         map=dict(center=centro, zoom=zoom, style="open-street-map"),
@@ -77,21 +85,22 @@ def mapa_cercano(recientes, lat0, lon0, radio_km, quemas=None):
 
 
 def grafico_estacional_zona(d):
+    ms = meses()
     c = d.groupby(d["fecha"].dt.month).size().reindex(range(1, 13), fill_value=0)
     c = c.reset_index()
     c.columns = ["mes", "detecciones"]
-    c["mes_nombre"] = c["mes"].map(lambda m: MESES[m - 1])
+    c["mes_nombre"] = c["mes"].map(lambda m: ms[m - 1])
     return px.bar(c, x="mes_nombre", y="detecciones",
-                  category_orders={"mes_nombre": MESES},
-                  title="Meses con actividad en esta zona (todos los años)",
-                  labels={"mes_nombre": "Mes", "detecciones": "Detecciones"})
+                  category_orders={"mes_nombre": ms},
+                  title=t("x_t_estac_zona"),
+                  labels={"mes_nombre": t("g_mes"), "detecciones": t("g_det")})
 
 
 def grafico_anual_zona(d):
     c = d.groupby(d["fecha"].dt.year).size().reset_index()
     c.columns = ["anio", "detecciones"]
-    return px.bar(c, x="anio", y="detecciones", title="Detecciones por año en esta zona",
-                  labels={"anio": "Año", "detecciones": "Detecciones"})
+    return px.bar(c, x="anio", y="detecciones", title=t("x_t_anual_zona"),
+                  labels={"anio": t("g_anio"), "detecciones": t("g_det")})
 
 
 # ---------- Quemas declaradas ----------
@@ -107,11 +116,11 @@ def cargar_quemas(ruta="data/quemas_autorizadas.csv", ruta_decl=RUTA_DECLARADAS)
     partes = []
     for r in (ruta, ruta_decl):
         try:
-            t = pd.read_csv(r, parse_dates=["fecha_inicio", "fecha_fin"])
+            tabla = pd.read_csv(r, parse_dates=["fecha_inicio", "fecha_fin"])
         except (FileNotFoundError, pd.errors.EmptyDataError):
             continue
-        if len(t):
-            partes.append(t)
+        if len(tabla):
+            partes.append(tabla)
     q = pd.concat(partes, ignore_index=True) if partes else pd.DataFrame()
     q = q.reindex(columns=COLS_DECL)
     q["es_ejemplo"] = q["es_ejemplo"].astype(str).str.lower().eq("true")
@@ -125,16 +134,33 @@ def guardar_quema(datos, ruta=RUTA_DECLARADAS):
     fila.to_csv(p, mode="a", header=not p.exists(), index=False, encoding="utf-8")
 
 
+def _motivo_vis(m):
+    m = "" if pd.isna(m) else str(m)
+    base, sep, resto = m.partition(" - ")
+    return motivo_txt(base) + sep + resto
+
+
 def resumen_quemas(df, quemas):
-    """Tabla pública: sin nombre, rango ni permiso."""
+    """Tabla pública: sin nombre, rango ni permiso. Los datos guardados quedan en
+    español; solo se traducen al mostrarlos."""
     filas = []
     for _, q in quemas.iterrows():
         sub = df[(df["fecha"] >= q["fecha_inicio"]) & (df["fecha"] <= q["fecha_fin"])]
         n = len(detecciones_cercanas(sub, q["latitud"], q["longitud"], q["radio_km"])) if len(sub) else 0
-        fila = {c: q.get(c) for c in COLS_PUBLICAS}
-        fila["detecciones_en_zona"] = n
-        filas.append(fila)
+        estado = q.get("estado")
+        filas.append({
+            t("rq_provincia"): q.get("provincia"),
+            t("rq_lugar"): q.get("lugar"),
+            t("rq_organizacion"): q.get("organizacion"),
+            t("rq_motivo"): _motivo_vis(q.get("motivo")),
+            t("rq_desde"): fecha_txt(q["fecha_inicio"]) if pd.notna(q["fecha_inicio"]) else "",
+            t("rq_hasta"): fecha_txt(q["fecha_fin"]) if pd.notna(q["fecha_fin"]) else "",
+            t("rq_radio"): q.get("radio_km"),
+            t("rq_estado"): t("x_estado_decl") if estado == "Declarada (sin verificar)" else estado,
+            t("rq_det"): n,
+        })
     return pd.DataFrame(filas)
+
 
 def marcar_quemas(cercanas, quemas):
     """True si la detección cae en el radio y las fechas de una quema declarada."""
@@ -146,20 +172,22 @@ def marcar_quemas(cercanas, quemas):
         c.loc[en_fecha & (d <= q["radio_km"]), "quema_autorizada"] = True
     return c
 
+
 # ---------- Señales de origen (inferidas) ----------
-# ---------- Intensidad y meses atípicos ----------
 def grafico_senales(df):
     d = pd.DataFrame({"anio": df["fecha"].dt.year, "senal": df["senal"].astype(str)})
     c = d.groupby(["anio", "senal"]).size().reset_index(name="n")
+    c["senal"] = c["senal"].map(senal_txt)  # se traduce después de agrupar (pocas filas)
     fig = px.bar(
         c, x="anio", y="n", color="senal",
-        title="Señales por año (% de detecciones)",
-        labels={"anio": "Año", "n": "%", "senal": ""},
+        title=t("x_t_senales"),
+        labels={"anio": t("g_anio"), "n": "%", "senal": t("x_senal")},
     )
     fig.update_layout(barmode="stack", barnorm="percent")
     return fig
 
 
+# ---------- Intensidad y meses atípicos ----------
 def tabla_anomalias(df, umbral=1.5):
     c = _conteo_mensual(df).dropna().copy()
     c["mes"] = c["fecha"].dt.month
@@ -172,26 +200,27 @@ def tabla_anomalias(df, umbral=1.5):
 
 def grafico_anomalias(df, umbral=1.5):
     c = tabla_anomalias(df, umbral)
-    c["tipo"] = c["anomalo"].map({True: "Muy por encima del promedio",
-                                  False: "Dentro de lo habitual"})
+    alto, norm = t("x_anom_alto"), t("x_anom_norm")
+    c["tipo"] = c["anomalo"].map({True: alto, False: norm})
     fig = px.bar(
         c, x="fecha", y="detecciones", color="tipo",
-        color_discrete_map={"Muy por encima del promedio": "#d62728",
-                            "Dentro de lo habitual": "#bdbdbd"},
-        title="Meses con actividad térmica muy por encima de lo habitual",
-        labels={"detecciones": "Detecciones", "fecha": "", "tipo": ""})
+        color_discrete_map={alto: "#d62728", norm: "#bdbdbd"},
+        title=t("x_t_anom"),
+        labels={"detecciones": t("g_det"), "fecha": "", "tipo": ""})
     fig.add_trace(go.Scatter(x=c["fecha"], y=c["media"], mode="lines",
-                             name="Promedio histórico del mes",
+                             name=t("x_anom_prom"),
                              line=dict(color="black", dash="dot", width=1)))
     fig.update_layout(height=420, legend_title_text="")
     return fig
+
 
 def grafico_frp_mensual(df):
     d = df.assign(mes=df["fecha"].dt.to_period("M").dt.to_timestamp())
     c = d.groupby(["mes", "sensor"], observed=True)["frp"].sum().reset_index()
     return px.bar(c, x="mes", y="frp", color="sensor", barmode="group",
-                  title="Intensidad térmica acumulada por mes (suma de FRP)",
-                  labels={"mes": "", "frp": "Suma de FRP (MW)"})
+                  title=t("x_t_frp"),
+                  labels={"mes": "", "frp": t("x_frp"), "sensor": t("g_sensor")})
+
 
 def grafico_densidad_provincias(df, sup):
     c = df.groupby("provincia", observed=True).size().reset_index(name="n")
@@ -202,7 +231,8 @@ def grafico_densidad_provincias(df, sup):
     return px.bar(
         c, x="por_1000km2", y="provincia", orientation="h",
         hover_data={"n": ":,", "km2": ":,.0f"},
-        title="Detecciones cada 1.000 km² (comparable entre provincias)",
-        labels={"por_1000km2": "Detecciones por 1.000 km²", "provincia": ""},
+        title=t("x_t_dens"),
+        labels={"por_1000km2": t("x_dens"), "provincia": "",
+                "n": t("x_n"), "km2": t("x_km2")},
         height=max(350, 24 * len(c)),
     )
