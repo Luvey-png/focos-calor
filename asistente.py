@@ -26,7 +26,7 @@ MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
 
 MODELOS = {
     "anthropic": "claude-sonnet-5-5",
-    "gemini": "gemini-2.5-flash",
+    "gemini": "gemini-3.6-flash",
     "openai": "gpt-4.1-mini",
 }
 RADIO_LUGAR_KM = 20
