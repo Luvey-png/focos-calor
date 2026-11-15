@@ -29,13 +29,11 @@ def dias():
 def grafico_mensual(df):
     """Detecciones por mes y sensor. A3 puede reemplazar el contenido;
     el nombre y lo que recibe/devuelve NO cambian."""
-    mes = df["fecha"].dt.to_period("M").dt.to_timestamp()
-    conteo = (
-        df.assign(mes=mes)
-        .groupby(["mes", "sensor"], observed=True)
-        .size()
-        .reset_index(name="detecciones")
-    )
+    per = df["fecha"].dt.to_period("M")
+    conteo = df.groupby([per, "sensor"], observed=True).size().reset_index(name="detecciones")
+    conteo["mes"] = conteo["fecha"].dt.to_timestamp()
+    conteo["sensor"] = conteo["sensor"].astype(str)
+    conteo = conteo[["mes", "sensor", "detecciones"]]
     return px.line(
         conteo, x="mes", y="detecciones", color="sensor",
         title=t("g_t_mensual"),
@@ -45,8 +43,9 @@ def grafico_mensual(df):
 
 def grafico_calendario(df, anio):
     """Calendario diario de un año: un cuadrado por día."""
-    d = df[df["fecha"].dt.year == anio]
-    por_dia = d.groupby("fecha").size()
+    f = df["fecha"]
+    f = f[f.dt.year == anio]
+    por_dia = f.value_counts()
     dias_anio = pd.date_range(f"{anio}-01-01", f"{anio}-12-31")
     por_dia = por_dia.reindex(dias_anio, fill_value=0)
 
@@ -87,8 +86,8 @@ def grafico_calendario(df, anio):
 
 def grafico_anio_mes(df):
     """Mapa de calor: filas = años, columnas = meses."""
-    d = pd.DataFrame({"anio": df["fecha"].dt.year, "mes": df["fecha"].dt.month})
-    tab = d.groupby(["anio", "mes"]).size().unstack(fill_value=0)
+    f = df["fecha"]
+    tab = f.groupby([f.dt.year.rename("anio"), f.dt.month.rename("mes")]).size().unstack(fill_value=0)
     tab = tab.reindex(columns=range(1, 13), fill_value=0)
     fig = px.imshow(
         tab.values, x=meses(), y=tab.index.astype(str),
@@ -106,8 +105,10 @@ def grafico_anio_mes(df):
 
 def grafico_comparacion_sensores(df):
     """MODIS vs VIIRS: detecciones por año, una barra por sensor."""
-    d = pd.DataFrame({"anio": df["fecha"].dt.year, "sensor": df["sensor"].astype(str)})
-    conteo = d.groupby(["anio", "sensor"]).size().reset_index(name="detecciones")
+    f = df["fecha"]
+    conteo = (df.groupby([f.dt.year.rename("anio"), "sensor"], observed=True)
+              .size().reset_index(name="detecciones"))
+    conteo["sensor"] = conteo["sensor"].astype(str)
     fig = px.bar(
         conteo, x="anio", y="detecciones", color="sensor", barmode="group",
         title=t("g_t_comp"),
@@ -121,8 +122,10 @@ def grafico_estacionalidad(df):
     """Detecciones por mes del año (todos los años juntos), por sensor.
     Muestra en qué época del año hay más actividad."""
     ms = meses()
-    d = pd.DataFrame({"mes": df["fecha"].dt.month, "sensor": df["sensor"].astype(str)})
-    conteo = d.groupby(["mes", "sensor"]).size().reset_index(name="detecciones")
+    f = df["fecha"]
+    conteo = (df.groupby([f.dt.month.rename("mes"), "sensor"], observed=True)
+              .size().reset_index(name="detecciones"))
+    conteo["sensor"] = conteo["sensor"].astype(str)
     conteo["mes_nombre"] = conteo["mes"].map(lambda m: ms[m - 1])
     fig = px.line(
         conteo, x="mes_nombre", y="detecciones", color="sensor", markers=True,
@@ -136,11 +139,9 @@ def grafico_estacionalidad(df):
 
 def grafico_confianza(df):
     """Distribución de confianza por sensor (en porcentaje)."""
-    d = pd.DataFrame({
-        "sensor": df["sensor"].astype(str),
-        "confianza": df["confianza"].astype(str),
-    })
-    conteo = d.groupby(["sensor", "confianza"]).size().reset_index(name="n")
+    conteo = df.groupby(["sensor", "confianza"], observed=True).size().reset_index(name="n")
+    conteo["sensor"] = conteo["sensor"].astype(str)
+    conteo["confianza"] = conteo["confianza"].astype(str)
     conteo["porcentaje"] = conteo["n"] / conteo.groupby("sensor")["n"].transform("sum") * 100
     niveles = ["baja", "nominal", "alta", "desconocida"]
     nombres = {n: t("g_conf_" + n) for n in niveles}
@@ -204,8 +205,14 @@ def cargar_oni(ruta="data/oni.txt", rezago=0):
 
 
 def _conteo_mensual(df):
-    mes = df["fecha"].dt.to_period("M").dt.to_timestamp()
-    c = mes.value_counts().sort_index().astype(float)
+    f = df["fecha"]
+    n = f.groupby([f.dt.year.rename("anio"), f.dt.month.rename("mes")]).size()
+    inicio = pd.to_datetime(pd.DataFrame({
+        "year": n.index.get_level_values(0),
+        "month": n.index.get_level_values(1),
+        "day": 1,
+    }))
+    c = pd.Series(n.to_numpy().astype(float), index=pd.DatetimeIndex(inicio)).sort_index()
     c = c.reindex(pd.date_range(c.index.min(), c.index.max(), freq="MS"), fill_value=0)
     c[c.index.year.isin(ANIOS_SIN_DATO)] = float("nan")  # ausencia de dato, no cero
     return c.rename_axis("fecha").rename("detecciones").reset_index()

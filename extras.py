@@ -175,9 +175,10 @@ def marcar_quemas(cercanas, quemas):
 
 # ---------- Señales de origen (inferidas) ----------
 def grafico_senales(df):
-    d = pd.DataFrame({"anio": df["fecha"].dt.year, "senal": df["senal"].astype(str)})
-    c = d.groupby(["anio", "senal"]).size().reset_index(name="n")
-    c["senal"] = c["senal"].map(senal_txt)  # se traduce después de agrupar (pocas filas)
+    f = df["fecha"]
+    c = (df.groupby([f.dt.year.rename("anio"), "senal"], observed=True)
+         .size().reset_index(name="n"))
+    c["senal"] = c["senal"].astype(str).map(senal_txt)  # se traduce después de agrupar (pocas filas)
     fig = px.bar(
         c, x="anio", y="n", color="senal",
         title=t("x_t_senales"),
@@ -215,8 +216,10 @@ def grafico_anomalias(df, umbral=1.5):
 
 
 def grafico_frp_mensual(df):
-    d = df.assign(mes=df["fecha"].dt.to_period("M").dt.to_timestamp())
-    c = d.groupby(["mes", "sensor"], observed=True)["frp"].sum().reset_index()
+    per = df["fecha"].dt.to_period("M")
+    c = df.groupby([per, "sensor"], observed=True)["frp"].sum().reset_index()
+    c["mes"] = c["fecha"].dt.to_timestamp()
+    c["sensor"] = c["sensor"].astype(str)
     return px.bar(c, x="mes", y="frp", color="sensor", barmode="group",
                   title=t("x_t_frp"),
                   labels={"mes": "", "frp": t("x_frp"), "sensor": t("g_sensor")})

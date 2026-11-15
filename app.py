@@ -125,7 +125,10 @@ def cargar_datos(version):
 _rutas = [Path("data/focos_real.parquet"), Path("data/focos_recientes.parquet")]
 _version = tuple(p.stat().st_mtime if p.exists() else 0 for p in _rutas)
 df = cargar_datos(_version)
-
+@st.cache_data(show_spinner=False)
+def tramo_sin_datos(version):
+    fechas = df["fecha"].drop_duplicates().sort_values()
+    return int(fechas.diff().dt.days.max())
 
 @st.cache_resource
 def preparar_armonizacion(_df, version):
@@ -187,9 +190,9 @@ mask = (
 if armonizado:
     mask &= ~df["es_duplicado"]
 df_f = df[mask]
-_dias = df["fecha"].drop_duplicates().sort_values().diff().dt.days
-if _dias.max() > 10:
-    st.warning(t("tramo", dias=int(_dias.max())))
+_hueco = tramo_sin_datos(_version)
+if _hueco > 10:
+    st.warning(t("tramo", dias=_hueco))
 
 st.sidebar.write(t("det_mostradas", n=num(len(df_f)), total=num(len(df))))
 
