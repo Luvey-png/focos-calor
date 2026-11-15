@@ -146,14 +146,6 @@ def marcar_quemas(cercanas, quemas):
     return c
 
 # ---------- Señales de origen (inferidas) ----------
-def grafico_senales(df):
-    d = pd.DataFrame({"anio": df["fecha"].dt.year, "senal": df["senal"].astype(str)})
-    c = d.groupby(["anio", "senal"]).size().reset_index(name="n")
-    return px.bar(c, x="anio", y="n", color="senal", barnorm="percent",
-                  title="Señales por año (% de detecciones)",
-                  labels={"anio": "Año", "n": "%", "senal": ""})
-
-
 # ---------- Intensidad y meses atípicos ----------
 def grafico_senales(df):
     d = pd.DataFrame({"anio": df["fecha"].dt.year, "senal": df["senal"].astype(str)})

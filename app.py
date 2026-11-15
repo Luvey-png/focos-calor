@@ -14,6 +14,7 @@ from extras import (
     grafico_senales, grafico_frp_mensual, grafico_anomalias, tabla_anomalias, grafico_densidad_provincias
 )
 from estilo import NOMBRE, ICONO, aplicar_estilo, encabezado
+import armonizacion as arm
 
 st.set_page_config(
     page_title=f"{NOMBRE} · Focos de calor",
@@ -62,7 +63,14 @@ def cargar_datos(version):
             df[c] = df[c].astype("float32")
     return df
 _rutas = [Path("data/focos_real.parquet"), Path("data/focos_recientes.parquet")]
-df = cargar_datos(tuple(p.stat().st_mtime if p.exists() else 0 for p in _rutas))
+_version = tuple(p.stat().st_mtime if p.exists() else 0 for p in _rutas)
+df = cargar_datos(_version)
+
+
+@st.cache_resource
+def preparar_armonizacion(_df, version):
+    m = arm.tabla_mensual(_df)
+    return m, arm.armonizar(m), arm.validar(m)
 encabezado(df)
 
 if df["es_prueba"].any():
@@ -72,7 +80,9 @@ if df["es_prueba"].any():
 st.sidebar.header("Filtros")
 
 armonizado = st.sidebar.checkbox(
-    "Armonizado (sin duplicados entre sensores)", value=True
+    "Quitar duplicados entre sensores", value=True,
+    help="Une las detecciones de MODIS y VIIRS en el mismo lugar y día. "
+         "La armonización de la serie entre satélites está en la pestaña 'Armonización'.",
 )
 
 lista_sensores = sorted(map(str, df["sensor"].unique()))
@@ -122,9 +132,9 @@ if df_f.empty:
     st.error("No hay detecciones con esos filtros.")
     st.stop()
 
-(tab_mapa, tab_cal, tab_graf, tab_enso, tab_gases, tab_cerca,
+(tab_mapa, tab_cal, tab_arm, tab_graf, tab_enso, tab_gases, tab_cerca,
  tab_origen, tab_quemas, tab_metodo, tab_datos) = st.tabs([
-    "Mapa", "Calendario", "Gráficos", "El Niño / La Niña", "Gases de carbono",
+    "Mapa", "Calendario", "Armonización", "Gráficos", "El Niño / La Niña", "Gases de carbono",
     "Cerca de mí", "Origen (inferido)", "Quemas", "Método y fuentes", "Datos",
 ])
 
@@ -166,6 +176,77 @@ with tab_cal:
     st.plotly_chart(grafico_anio_mes(df_f), use_container_width=True)
     st.caption(
         "Cada valor es un conteo de detecciones térmicas, no de incendios confirmados."
+    )
+
+with tab_arm:
+    st.subheader("Serie armonizada entre satélites (2000 en adelante)")
+    st.markdown(
+        "Cada satélite nuevo cambia la cantidad de detecciones aunque la actividad real "
+        "no cambie: **Aqua (2002)**, **VIIRS S-NPP (2012)**, **NOAA-20 (2018)** y "
+        "**NOAA-21 (2023)**. Sumarlos genera saltos falsos. Acá todo se lleva a una "
+        "escala común: **equivalente VIIRS S-NPP**."
+    )
+    m_arm, h_arm, (val_tabla, val_serie, val_corte) = preparar_armonizacion(df, _version)
+    h_f = arm.filtrar(h_arm, provincias, desde, hasta)
+    st.caption(
+        "Usa los filtros de provincia y fechas. No usa los filtros de sensor ni de "
+        "duplicados: la armonización necesita cada satélite por separado."
+    )
+    if h_f["armonizado"].notna().sum() == 0:
+        st.info("No hay datos armonizados para esos filtros.")
+    else:
+        a_f = arm.anual(h_f)
+        _ult = df["fecha"].max()
+        _parcial = _ult.year if (_ult.month, _ult.day) != (12, 31) else None
+        st.plotly_chart(arm.grafico_antes_despues(a_f, _parcial), use_container_width=True)
+        st.plotly_chart(arm.grafico_calendario_armonizado(h_f), use_container_width=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(arm.grafico_periodos_criticos(h_f), use_container_width=True)
+        with c2:
+            umbral_a = st.slider("Umbral de anomalía (desvíos sobre lo normal del mes)",
+                                 1.0, 3.0, 1.5, 0.1, key="umbral_arm")
+            an = arm.anomalias(h_f, umbral_a)
+            top_a = an[an["anomalo"]].sort_values("z", ascending=False).head(8)
+            st.dataframe(
+                top_a.assign(mes=top_a["fecha"].dt.strftime("%m/%Y"),
+                             armonizado=top_a["armonizado"].round(),
+                             normal=top_a["mean"].round(), z=top_a["z"].round(1))[
+                    ["mes", "armonizado", "normal", "z", "metodo"]].rename(
+                    columns={"armonizado": "detecciones", "normal": "normal del mes",
+                             "z": "desvíos", "metodo": "fuente"}),
+                hide_index=True,
+            )
+        st.plotly_chart(arm.grafico_anomalias_armonizadas(an, umbral_a), use_container_width=True)
+
+    st.subheader("¿Funciona? Validación con años que el método no vio")
+    st.markdown(
+        f"Se calculan los factores solo con 2012-{val_corte} y se estima VIIRS S-NPP "
+        f"de {val_corte + 1} en adelante a partir de MODIS Aqua. Después se compara con "
+        "lo que S-NPP observó de verdad. El error es la mediana del error relativo."
+    )
+    st.dataframe(
+        val_tabla.assign(**{c: (val_tabla[c] * 100).round(1).astype(str) + " %"
+                            for c in ("Error mensual país", "Error anual por provincia")}),
+        hide_index=True,
+    )
+    st.plotly_chart(arm.grafico_validacion(val_serie, val_corte), use_container_width=True)
+
+    with st.expander("Factores de conversión VIIRS S-NPP / MODIS Aqua por provincia y mes"):
+        fac, fac_nac = arm.tabla_factores(m_arm, provincias)
+        st.dataframe(fac)
+        st.caption(
+            f"Promedio nacional: {fac_nac:.1f}. Celdas vacías: menos de {arm.MIN_DET} "
+            "detecciones de Aqua en ese mes; se usa el factor anual de la provincia."
+        )
+    st.info(
+        "Cómo se arma la serie: desde 2012 se usa lo observado por VIIRS S-NPP. Entre "
+        "2002 y 2011 se estima desde MODIS Aqua, que pasa a la misma hora que S-NPP "
+        "(~13:30), con un factor por provincia y mes calculado en 2012-2025. En 2000-2001 "
+        "solo hay MODIS Terra: se lleva a Aqua y después a S-NPP (más incertidumbre). Los años sin datos de "
+        "ningún satélite (2005 y 2010) quedan vacíos. El año en curso usa datos de casi "
+        "tiempo real y puede estar incompleto. Cada valor es un conteo de detecciones "
+        "térmicas, no de incendios confirmados."
     )
 
 with tab_graf:
@@ -401,10 +482,15 @@ al {df['fecha'].max():%d/%m/%Y}. Satélites/sensores: {', '.join(sorted(map(str,
 **Procesamiento**
 1. Recorte a Argentina y asignación de provincia y región por ubicación.
 2. Confianza unificada en baja / nominal / alta (MODIS 0-100 y VIIRS l/n/h).
-3. Armonización entre sensores: una cuadrícula de 0,01° (~1 km) por día; se
+3. Duplicados entre sensores: una cuadrícula de 0,01° (~1 km) por día; se
    conserva la detección de mayor confianza y FRP. Puede unir también detecciones
    del mismo sensor y no une las que caen en celdas vecinas.
-4. Los datos más recientes provienen de productos de casi tiempo real (NRT),
+4. Armonización de la serie entre satélites (pestaña "Armonización"): todo se
+   lleva a "equivalente VIIRS S-NPP". Desde 2012 se usa S-NPP observado; antes se
+   estima desde MODIS Aqua (y Terra en 2000-2001) con factores por provincia y mes
+   ajustados en los años en que los satélites se superponen, y validados con años
+   que el método no usó.
+5. Los datos más recientes provienen de productos de casi tiempo real (NRT),
    que pueden cambiar cuando se publique la versión estándar.
 
 **Límites que hay que tener presentes**
