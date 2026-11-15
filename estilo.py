@@ -160,7 +160,7 @@ def aplicar_estilo():
 
 
 def encabezado(df):
-    es = st.session_state.get("idioma", "es") == "es"
+    es = st.session_state.get("idioma", "en") == "es"
     img = _b64(LOGO)
     lema = t("lema")
     if img:

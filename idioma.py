@@ -77,7 +77,7 @@ TEXTOS = {
 def selector_idioma():
     st.sidebar.radio(
         "Idioma / Language",
-        ["es", "en"],
+        ["en", "es"],
         format_func=lambda x: {"es": "Español", "en": "English"}[x],
         horizontal=True,
         key="idioma",
@@ -85,7 +85,7 @@ def selector_idioma():
 
 
 def t(clave, **kw):
-    idioma = st.session_state.get("idioma", "es")
+    idioma = st.session_state.get("idioma", "en")
     texto = TEXTOS.get(idioma, {}).get(clave) or TEXTOS["es"].get(clave, clave)
     return texto.format(**kw) if kw else texto
 
@@ -122,21 +122,21 @@ REGIONES_EN = {"Noreste": "Northeast", "Pampeana": "Pampas", "Noroeste": "Northw
 
 
 def region_txt(x):
-    if st.session_state.get("idioma", "es") == "en":
+    if st.session_state.get("idioma", "en") == "en":
         return REGIONES_EN.get(x, x)
     return x
 
 
 def num(n):
     s = f"{n:,}"
-    return s if st.session_state.get("idioma", "es") == "en" else s.replace(",", ".")
+    return s if st.session_state.get("idioma", "en") == "en" else s.replace(",", ".")
 
 
 def formato_fecha():
-    return "YYYY/MM/DD" if st.session_state.get("idioma", "es") == "en" else "DD/MM/YYYY"
+    return "YYYY/MM/DD" if st.session_state.get("idioma", "en") == "en" else "DD/MM/YYYY"
 
 def fecha_txt(d):
-    return f"{d:%Y-%m-%d}" if st.session_state.get("idioma", "es") == "en" else f"{d:%d/%m/%Y}"
+    return f"{d:%Y-%m-%d}" if st.session_state.get("idioma", "en") == "en" else f"{d:%d/%m/%Y}"
 
 
 SENALES_EN = {
@@ -149,7 +149,7 @@ SENALES_EN = {
 
 
 def senal_txt(x):
-    if st.session_state.get("idioma", "es") == "en":
+    if st.session_state.get("idioma", "en") == "en":
         return SENALES_EN.get(str(x), str(x))
     return str(x)
 
@@ -165,7 +165,7 @@ MOTIVOS_EN = {
 
 
 def motivo_txt(m):
-    if st.session_state.get("idioma", "es") == "en":
+    if st.session_state.get("idioma", "en") == "en":
         return MOTIVOS_EN.get(m, m)
     return m
 
