@@ -1,8 +1,7 @@
 # Asistente de IA
 
-**Rama:** `armonizacion-sensores`
-**Archivos:** `asistente.py` (nuevo), `app.py`, `extras.py`,
-`.streamlit/secrets.toml.example` (nuevo)
+**Rama:** `armonizacion-sensores`\
+**Archivos:** `asistente.py` (nuevo), `app.py`, `extras.py`, `.streamlit/secrets.toml.example` (nuevo)\
 **Fecha:** 15/11/2026
 
 ## 1. Qué hace

@@ -1,7 +1,7 @@
 # Armonización de la serie entre satélites
 
-**Rama:** `armonizacion-sensores`
-**Archivos:** `armonizacion.py` (nuevo), `app.py`, `extras.py`
+**Rama:** `armonizacion-sensores`\
+**Archivos:** `armonizacion.py` (nuevo), `app.py`, `extras.py`\
 **Fecha:** 15/11/2026
 
 ## 1. El problema
