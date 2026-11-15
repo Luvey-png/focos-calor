@@ -17,7 +17,7 @@ from estilo import NOMBRE, ICONO, aplicar_estilo, encabezado
 import armonizacion as arm
 import asistente as ia
 from idioma import (
-    t, selector_idioma, region_txt, num, formato_fecha, fecha_txt, senal_txt, motivo_txt,
+    t, selector_idioma, region_txt, num, formato_fecha, fecha_txt, senal_txt, motivo_txt, valid_txt,
 )
 
 st.set_page_config(
@@ -333,6 +333,8 @@ with tab_arm:
 
     st.subheader(t("arm_valid_sub"))
     st.markdown(t("arm_valid_txt", corte=val_corte, corte1=val_corte + 1))
+    val_tabla = val_tabla.assign(Método=val_tabla["Método"].map(valid_txt))
+    val_tabla = val_tabla.rename(columns={"Método": t("h_col_metodo")})
     st.dataframe(
         val_tabla.assign(**{c: (val_tabla[c] * 100).round(1).astype(str) + " %"
                             for c in ("Error mensual país", "Error anual por provincia")}
@@ -471,8 +473,8 @@ with tab_quemas:
         lon_q = c6.number_input(t("lon"), value=-66.34, format="%.4f")
         c7, c8, c9 = st.columns(3)
         hoy = pd.Timestamp.today().date()
-        f_ini = c7.date_input(t("f_inicio"), value=hoy)
-        f_fin = c8.date_input(t("f_fin"), value=hoy)
+        f_ini = c7.date_input(t("f_inicio"), value=hoy, format=formato_fecha())
+        f_fin = c8.date_input(t("f_fin"), value=hoy, format=formato_fecha())
         radio_q = c9.slider(t("f_radio"), 0.5, 20.0, 2.0, 0.5)
         acepto = st.checkbox(t("f_acepto"))
         enviar = st.form_submit_button(t("f_enviar"))

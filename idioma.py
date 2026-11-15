@@ -493,3 +493,93 @@ TEXTOS["en"].update({
     "rq_motivo": "reason", "rq_desde": "from", "rq_hasta": "to",
     "rq_radio": "radius_km", "rq_estado": "status", "rq_det": "detections_in_area",
 })
+
+MESES_ABREV_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+MESES_ABREV_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def meses_abrev():
+    return MESES_ABREV_EN if t("h_lang") == "en" else MESES_ABREV_ES
+
+
+METODOS_EN = {
+    "Observado (VIIRS S-NPP)": "Observed (VIIRS S-NPP)",
+    "Estimado desde VIIRS NOAA-20": "Estimated from VIIRS NOAA-20",
+    "Estimado desde VIIRS NOAA-21": "Estimated from VIIRS NOAA-21",
+    "Estimado desde MODIS Aqua": "Estimated from MODIS Aqua",
+    "Estimado desde MODIS Terra": "Estimated from MODIS Terra",
+    "Sin datos": "No data",
+}
+
+VALID_EN = {
+    "Factor por provincia y mes (el nuestro)": "Factor by province and month (ours)",
+    "Factor único nacional": "Single national factor",
+    "Sumar todos los satélites (sin armonizar)": "Sum of all satellites (not harmonized)",
+}
+
+
+def metodo_txt(x):
+    return METODOS_EN.get(x, x) if t("h_lang") == "en" else x
+
+
+def valid_txt(x):
+    return VALID_EN.get(x, x) if t("h_lang") == "en" else x
+
+
+TEXTOS["es"].update({
+    "h_lang": "es",
+    "h_suma_cruda": "Suma cruda de todos los satélites",
+    "h_serie_arm": "Serie armonizada (equivalente VIIRS S-NPP)",
+    "h_en_curso": "año en curso<br>(incompleto)",
+    "h_ad_title": "Antes y después: sumar satélites vs. serie armonizada",
+    "h_anio": "Año",
+    "h_mes": "Mes",
+    "h_det_anio": "Detecciones por año",
+    "h_det_eq": "Detecciones (eq. S-NPP)",
+    "h_cal_title": "Calendario armonizado de actividad de quema",
+    "h_critico": "Período crítico",
+    "h_resto": "Resto del año",
+    "h_prom_arm": "Promedio armonizado",
+    "h_crit_title": "Períodos críticos: actividad promedio de cada mes (armonizada)",
+    "h_armonizado": "Armonizado",
+    "h_normal_mes": "Normal para ese mes",
+    "h_atipico": "Atípico (≥ {umbral} desvíos)",
+    "h_anom_title": "Condiciones fuera de lo normal (sobre la serie armonizada)",
+    "h_det_mes_eq": "Detecciones por mes (eq. S-NPP)",
+    "h_obs": "VIIRS S-NPP observado",
+    "h_est_local": "Estimado: factor por provincia y mes",
+    "h_est_unico": "Estimado: factor único nacional",
+    "h_val_title": "Validación: años {corte1} en adelante, que el método no usó para ajustarse",
+    "h_det_mes": "Detecciones por mes",
+    "h_todo_anio": "Todo el año",
+    "h_col_metodo": "Método",
+})
+
+TEXTOS["en"].update({
+    "h_lang": "en",
+    "h_suma_cruda": "Raw sum of all satellites",
+    "h_serie_arm": "Harmonized series (VIIRS S-NPP equivalent)",
+    "h_en_curso": "current year<br>(incomplete)",
+    "h_ad_title": "Before and after: summing satellites vs. harmonized series",
+    "h_anio": "Year",
+    "h_mes": "Month",
+    "h_det_anio": "Detections per year",
+    "h_det_eq": "Detections (S-NPP eq.)",
+    "h_cal_title": "Harmonized burning activity calendar",
+    "h_critico": "Critical period",
+    "h_resto": "Rest of the year",
+    "h_prom_arm": "Harmonized average",
+    "h_crit_title": "Critical periods: average activity of each month (harmonized)",
+    "h_armonizado": "Harmonized",
+    "h_normal_mes": "Normal for that month",
+    "h_atipico": "Unusual (≥ {umbral} deviations)",
+    "h_anom_title": "Out-of-the-ordinary conditions (on the harmonized series)",
+    "h_det_mes_eq": "Detections per month (S-NPP eq.)",
+    "h_obs": "VIIRS S-NPP observed",
+    "h_est_local": "Estimated: factor by province and month",
+    "h_est_unico": "Estimated: single national factor",
+    "h_val_title": "Validation: years {corte1} onward, which the method did not use for fitting",
+    "h_det_mes": "Detections per month",
+    "h_todo_anio": "Whole year",
+    "h_col_metodo": "Method",
+})

@@ -30,12 +30,13 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from idioma import t, meses_abrev, metodo_txt
+
 SAT_REF = "N"        # VIIRS S-NPP en la columna 'satelite'
 SAT_PUENTE = "Aqua"  # MODIS Aqua
 SAT_VIEJO = "Terra"  # MODIS Terra
 MIN_DET = 20         # mínimo de detecciones del satélite puente para confiar en un factor local
 LANZAMIENTOS = {2002: "Aqua", 2012: "VIIRS S-NPP", 2018: "NOAA-20", 2023: "NOAA-21"}
-MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
 
 # ---------- Tabla base ----------
@@ -141,7 +142,7 @@ def armonizar(m, factores=None):
         (m[f"hay_{SAT_VIEJO}"], m[SAT_VIEJO] * r_at * r_ra, "Estimado desde MODIS Terra"),
     ]
     m["armonizado"] = np.select([c for c, _, _ in casos], [v for _, v, _ in casos], default=np.nan)
-    m["metodo"] = np.select([c for c, _, _ in casos], [t for _, _, t in casos], default="Sin datos")
+    m["metodo"] = np.select([c for c, _, _ in casos], [x for _, _, x in casos], default="Sin datos")
     m["suma_cruda"] = m[[s for s in SATELITES if s in m.columns]].sum(axis=1)
     return m
 
@@ -206,86 +207,91 @@ def anomalias(h, umbral=1.5):
     g = g.join(clima, on="mes")
     g["z"] = (g["armonizado"] - g["mean"]) / g["std"].replace(0, np.nan)
     g["anomalo"] = g["z"] >= umbral
+    g["metodo"] = g["metodo"].map(metodo_txt)  # solo para mostrar
     return g
 
 
 # ---------- Gráficos ----------
 def grafico_antes_despues(a, anio_parcial=None):
     fig = go.Figure()
-    fig.add_bar(x=a["anio"], y=a["suma_cruda"], name="Suma cruda de todos los satélites",
+    fig.add_bar(x=a["anio"], y=a["suma_cruda"], name=t("h_suma_cruda"),
                 marker_color="rgba(160,160,160,0.45)")
-    fig.add_scatter(x=a["anio"], y=a["armonizado"], name="Serie armonizada (equivalente VIIRS S-NPP)",
+    fig.add_scatter(x=a["anio"], y=a["armonizado"], name=t("h_serie_arm"),
                     mode="lines+markers", line=dict(color="#FF6B1A", width=3), connectgaps=False)
     for anio, sat in LANZAMIENTOS.items():
         fig.add_vline(x=anio - 0.5, line_dash="dot", line_color="#999")
         fig.add_annotation(x=anio - 0.5, y=1.02, yref="paper", text=f"+{sat}",
                            showarrow=False, font=dict(size=10), xanchor="left")
     if anio_parcial is not None and anio_parcial in set(a["anio"]):
-        fig.add_annotation(x=anio_parcial, y=0, yref="paper", yanchor="bottom", text="año en curso<br>(incompleto)",
+        fig.add_annotation(x=anio_parcial, y=0, yref="paper", yanchor="bottom",
+                           text=t("h_en_curso"),
                            showarrow=False, font=dict(size=9, color="#bbb"))
-    fig.update_layout(title="Antes y después: sumar satélites vs. serie armonizada",
-                      xaxis_title="Año", yaxis_title="Detecciones por año",
+    fig.update_layout(title=t("h_ad_title"),
+                      xaxis_title=t("h_anio"), yaxis_title=t("h_det_anio"),
                       legend=dict(orientation="h", y=-0.2), height=470)
     return fig
 
 
 def grafico_calendario_armonizado(h):
     g = mensual_total(h)
-    t = g.pivot(index="anio", columns="mes", values="armonizado").reindex(columns=range(1, 13))
-    t = t.reindex(range(int(t.index.min()), int(t.index.max()) + 1))
-    fig = px.imshow(t, x=MESES, y=t.index.astype(str), aspect="auto",
+    piv = g.pivot(index="anio", columns="mes", values="armonizado").reindex(columns=range(1, 13))
+    piv = piv.reindex(range(int(piv.index.min()), int(piv.index.max()) + 1))
+    fig = px.imshow(piv, x=meses_abrev(), y=piv.index.astype(str), aspect="auto",
                     color_continuous_scale="YlOrRd",
-                    labels=dict(x="Mes", y="Año", color="Detecciones (eq. S-NPP)"),
-                    title="Calendario armonizado de actividad de quema")
-    fig.update_layout(height=max(420, 22 * len(t)))
+                    labels=dict(x=t("h_mes"), y=t("h_anio"), color=t("h_det_eq")),
+                    title=t("h_cal_title"))
+    fig.update_layout(height=max(420, 22 * len(piv)))
     return fig
 
 
 def grafico_periodos_criticos(h):
+    ms = meses_abrev()
+    crit, resto = t("h_critico"), t("h_resto")
     g = mensual_total(h).dropna(subset=["armonizado"])
     c = g.groupby("mes")["armonizado"].agg(["mean", "std"]).reindex(range(1, 13)).reset_index()
     umbral = c["mean"].quantile(0.75)
-    c["tipo"] = np.where(c["mean"] >= umbral, "Período crítico", "Resto del año")
-    c["nombre_mes"] = c["mes"].map(lambda i: MESES[i - 1])
-    fig = px.bar(c, x="nombre_mes", y="mean", color="tipo", category_orders={"nombre_mes": MESES},
-                 error_y="std", color_discrete_map={"Período crítico": "#E8590C", "Resto del año": "#6c5f57"},
-                 labels={"nombre_mes": "Mes", "mean": "Promedio armonizado", "tipo": ""},
-                 title="Períodos críticos: actividad promedio de cada mes (armonizada)")
+    c["tipo"] = np.where(c["mean"] >= umbral, crit, resto)
+    c["nombre_mes"] = c["mes"].map(lambda i: ms[i - 1])
+    fig = px.bar(c, x="nombre_mes", y="mean", color="tipo", category_orders={"nombre_mes": ms},
+                 error_y="std", color_discrete_map={crit: "#E8590C", resto: "#6c5f57"},
+                 labels={"nombre_mes": t("h_mes"), "mean": t("h_prom_arm"), "tipo": ""},
+                 title=t("h_crit_title"))
     return fig
 
 
 def grafico_anomalias_armonizadas(g, umbral):
     fig = go.Figure()
-    fig.add_scatter(x=g["fecha"], y=g["armonizado"], mode="lines", name="Armonizado",
+    fig.add_scatter(x=g["fecha"], y=g["armonizado"], mode="lines", name=t("h_armonizado"),
                     line=dict(color="#c9b8aa"))
-    fig.add_scatter(x=g["fecha"], y=g["mean"], mode="lines", name="Normal para ese mes",
+    fig.add_scatter(x=g["fecha"], y=g["mean"], mode="lines", name=t("h_normal_mes"),
                     line=dict(color="#888", dash="dot"))
     a = g[g["anomalo"]]
-    fig.add_scatter(x=a["fecha"], y=a["armonizado"], mode="markers", name=f"Atípico (≥ {umbral} desvíos)",
+    fig.add_scatter(x=a["fecha"], y=a["armonizado"], mode="markers",
+                    name=t("h_atipico", umbral=umbral),
                     marker=dict(color="#FF3B1A", size=9))
-    fig.update_layout(title="Condiciones fuera de lo normal (sobre la serie armonizada)",
-                      yaxis_title="Detecciones por mes (eq. S-NPP)", height=420,
+    fig.update_layout(title=t("h_anom_title"),
+                      yaxis_title=t("h_det_mes_eq"), height=420,
                       legend=dict(orientation="h", y=-0.2))
     return fig
 
 
 def grafico_validacion(serie, corte):
     fig = go.Figure()
-    fig.add_scatter(x=serie["fecha"], y=serie[SAT_REF], name="VIIRS S-NPP observado",
+    fig.add_scatter(x=serie["fecha"], y=serie[SAT_REF], name=t("h_obs"),
                     line=dict(color="#F4EDE4", width=3))
-    fig.add_scatter(x=serie["fecha"], y=serie["pred_local"], name="Estimado: factor por provincia y mes",
+    fig.add_scatter(x=serie["fecha"], y=serie["pred_local"], name=t("h_est_local"),
                     line=dict(color="#FF6B1A", dash="dash"))
-    fig.add_scatter(x=serie["fecha"], y=serie["pred_unico"], name="Estimado: factor único nacional",
+    fig.add_scatter(x=serie["fecha"], y=serie["pred_unico"], name=t("h_est_unico"),
                     line=dict(color="#8a7f77", dash="dot"))
-    fig.update_layout(title=f"Validación: años {corte + 1} en adelante, que el método no usó para ajustarse",
-                      yaxis_title="Detecciones por mes", height=420, legend=dict(orientation="h", y=-0.2))
+    fig.update_layout(title=t("h_val_title", corte1=corte + 1),
+                      yaxis_title=t("h_det_mes"), height=420, legend=dict(orientation="h", y=-0.2))
     return fig
 
 
 def tabla_factores(m, provincias):
     local, prov, nac = ajustar(m)["ref_aqua"]
-    t = local.unstack("mes").reindex(columns=range(1, 13))
-    t.columns = MESES
-    t = t.loc[t.index.isin(provincias)]
-    t.insert(0, "Todo el año", prov.reindex(t.index))
-    return t.round(1), nac
+    tb = local.unstack("mes").reindex(columns=range(1, 13))
+    tb.columns = meses_abrev()
+    tb = tb.loc[tb.index.isin(provincias)]
+    tb.insert(0, t("h_todo_anio"), prov.reindex(tb.index))
+    return tb.round(1), nac
