@@ -578,6 +578,9 @@ al {df['fecha'].max():%d/%m/%Y}. Satélites/sensores: {', '.join(sorted(map(str,
 """)
     st.caption("Texto científico a cargo de Luis; documentación de decisiones a cargo de A4.")
 
+with tab_gases:
+    st.info("Próximamente: emisiones de carbono por incendios (CAMS GFAS). Datos en preparación.")
+    
 with tab_datos:
     st.dataframe(df_f.head(5000))
     st.caption("Se muestran las primeras 5.000 filas.")
