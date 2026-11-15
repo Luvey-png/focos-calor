@@ -138,10 +138,11 @@ if df_f.empty:
     st.error("No hay detecciones con esos filtros.")
     st.stop()
 
-(tab_ia, tab_mapa, tab_cal, tab_arm, tab_graf, tab_enso, tab_gases, tab_cerca,
+(tab_mapa, tab_cerca, tab_arm, tab_ia, tab_graf, tab_cal, tab_enso, tab_gases,
  tab_origen, tab_quemas, tab_metodo, tab_datos) = st.tabs([
-    "Asistente IA", "Mapa", "Calendario", "Armonización", "Gráficos", "El Niño / La Niña", "Gases de carbono",
-    "Cerca de mí", "Origen (inferido)", "Quemas", "Método y fuentes", "Datos",
+    "Mapa", "Cerca de mí", "Armonización", "Asistente IA", "Gráficos", "Calendario",
+    "El Niño / La Niña", "Gases de carbono", "Origen (inferido)", "Quemas",
+    "Método y fuentes", "Datos",
 ])
 
 with tab_ia:
