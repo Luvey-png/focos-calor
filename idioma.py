@@ -583,3 +583,49 @@ TEXTOS["en"].update({
     "h_todo_anio": "Whole year",
     "h_col_metodo": "Method",
 })
+
+TEXTOS["es"].update({
+    "cm_titulo": "Cómo se usa esta sección",
+    "cm_md": """**Qué es.** Los satélites de la NASA detectan puntos de la superficie con una temperatura anormalmente alta. Se llaman *focos de calor*. Esta sección te muestra cuántos hubo cerca de un lugar que elijas. Un foco de calor **no es un incendio confirmado**: puede ser una quema agrícola, una fuente industrial u otra cosa.
+
+**Cómo usarla, paso a paso**
+1. **Lugar:** elegí uno de la lista. Si el tuyo no está, elegí "Otro (coordenadas)" y escribí la latitud y la longitud. Podés copiarlas desde Google Maps: tocá y mantené sobre el punto y aparecen los números.
+2. **Radio:** es la distancia alrededor del lugar que querés revisar, en kilómetros. Con 20 km se empieza bien.
+3. **Ventana reciente:** cuántos días hacia atrás querés mirar. Por defecto son 30.
+4. Mirá el resultado: los tres números, el mapa y el mensaje de color.
+
+**Cómo leer el resultado**
+- **Detecciones recientes:** focos dentro del radio y de los días que elegiste.
+- **Dentro de una quema declarada:** de esos focos, cuántos caen en una quema controlada que alguien registró en la pestaña Quemas. Si hay coincidencia, es probable que el foco sea esa quema.
+- **Históricas en la zona:** cuántos focos hubo en esa zona entre 2000 y 2026. Sirve para comparar: si hay pocos recientes pero muchos históricos, la zona suele tener actividad.
+- **Mapa:** cada punto es un foco dentro del radio.
+- **Mensaje de color:** te avisa si hay detecciones o si no hay ninguna.
+- **Gráficos de abajo:** muestran en qué época del año y en qué años hubo más focos en esa zona.
+
+**Un ejemplo.** Querés saber si hubo focos cerca de tu campo en la última semana: elegí tu ubicación, poné un radio de 10 km y una ventana de 7 días.
+
+**Para tener en cuenta.** "Reciente" se cuenta hasta el último día con datos cargados (figura arriba, en "último dato"), no hasta hoy. Los filtros de la barra lateral (fechas, provincias, sensores) también se aplican acá. Esta sección informa detecciones satelitales: no es un pronóstico ni una alerta oficial. Ante un incendio, llamá al 100 o al 911.""",
+})
+
+TEXTOS["en"].update({
+    "cm_titulo": "How to use this section",
+    "cm_md": """**What it is.** NASA satellites detect spots on the surface with an unusually high temperature. They are called *heat hotspots*. This section shows how many there were near a place you choose. A heat hotspot is **not a confirmed wildfire**: it may be an agricultural burn, an industrial source or something else.
+
+**How to use it, step by step**
+1. **Place:** pick one from the list. If yours is not there, choose "Other (coordinates)" and type the latitude and longitude. You can copy them from Google Maps: press and hold on the spot and the numbers appear.
+2. **Radius:** the distance around the place that you want to check, in kilometers. 20 km is a good start.
+3. **Recent window:** how many days back you want to look. The default is 30.
+4. Read the result: the three numbers, the map and the colored message.
+
+**How to read the result**
+- **Recent detections:** hotspots within the radius and the days you chose.
+- **Inside a declared burn:** of those hotspots, how many fall inside a controlled burn that someone registered in the Controlled burns tab. If there is a match, the hotspot is probably that burn.
+- **Historical in the area:** how many hotspots there were in that area between 2000 and 2026. Useful for comparison: few recent ones but many historical ones means the area is usually active.
+- **Map:** each point is a hotspot within the radius.
+- **Colored message:** tells you whether there are detections or none.
+- **Charts below:** show in which time of year and in which years there were more hotspots in that area.
+
+**An example.** You want to know whether there were hotspots near your farm in the last week: choose your location, set a radius of 10 km and a window of 7 days.
+
+**Keep in mind.** "Recent" is counted up to the last day with loaded data (shown at the top, under "latest data"), not up to today. The sidebar filters (dates, provinces, sensors) also apply here. This section reports satellite detections: it is not a forecast or an official alert. In case of a fire, call 100 or 911.""",
+})

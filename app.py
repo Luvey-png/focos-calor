@@ -401,6 +401,8 @@ with tab_enso:
 with tab_cerca:
     st.subheader(t("cerca_sub"))
     st.caption(t("cerca_cap"))
+    with st.expander(t("cm_titulo")):
+        st.markdown(t("cm_md"))
     c1, c2, c3 = st.columns(3)
     lugar = c1.selectbox(t("cerca_lugar"), list(LUGARES) + [OTRO], format_func=_lugar_txt)
     if lugar == OTRO:
