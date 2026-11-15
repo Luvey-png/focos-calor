@@ -1,4 +1,5 @@
 import base64
+import re
 import types
 from pathlib import Path
 import plotly.express as px
@@ -30,9 +31,18 @@ footer { visibility: hidden; }
 button[data-baseweb="tab"] { font-weight:600; }
 [data-testid="stMetric"] { background:var(--ceniza); border-radius:12px;
   padding:.6rem .8rem; border:1px solid rgba(255,140,60,.15); }
+.titulo-graf { font-weight:700; font-size:.98rem; line-height:1.3; margin:.8rem 0 .1rem; }
 .solo-movil { display:none; font-size:.85rem; opacity:.8; margin-bottom:.6rem; }
 @media (max-width: 640px) {
-  .block-container { padding:.6rem .6rem 3rem; }
+  .block-container { padding:3.4rem .7rem 3rem; }
+  h2, [data-testid="stHeading"] h2 { font-size:1.25rem !important; }
+  h3, [data-testid="stHeading"] h3 { font-size:1.08rem !important; }
+  [data-testid="stAlert"] p, [data-testid="stCaptionContainer"] p { font-size:.85rem; }
+  [data-testid="stMarkdownContainer"] p { overflow-wrap:anywhere; }
+  [data-testid="stMetric"] { padding:.45rem .6rem; }
+  [data-testid="stMetricValue"] { font-size:1.4rem; }
+  [data-testid="stChatMessage"] { padding:.6rem .5rem; }
+  .stButton button { width:100%; }
   .hero { padding:.8rem; gap:.8rem; border-radius:14px; }
   .hero img { height:56px; }
   .hero-t { font-size:1.35rem; }
@@ -53,8 +63,53 @@ def _miles(n):
     return f"{n:,}".replace(",", ".")
 
 
+def es_movil():
+    """True si el navegador es de un celular o tablet (según el User-Agent)."""
+    if "_es_movil" not in st.session_state:
+        try:
+            ua = st.context.headers.get("User-Agent", "") or ""
+        except Exception:
+            ua = ""
+        st.session_state["_es_movil"] = bool(
+            re.search(r"Mobi|Android|iPhone|iPod|iPad|Opera Mini|IEMobile", ua))
+    return st.session_state["_es_movil"]
+
+
+def ajustar_para_movil(fig):
+    """Adapta un gráfico Plotly a una pantalla de celular: saca el título (se
+    muestra aparte, como texto que se acomoda solo), pone la leyenda y la barra
+    de colores arriba del gráfico (así no le quitan ancho), achica márgenes y letra.
+    Devuelve el título que tenía el gráfico."""
+    titulo = fig.layout.title.text
+    fig.update_layout(title_text="")
+    con_color = bool(fig.layout.coloraxis.colorscale) or any(
+        t.type == "heatmap" for t in fig.data)
+    nombres = {t.name for t in fig.data if t.name and t.showlegend is not False}
+    con_leyenda = fig.layout.showlegend is not False and len(nombres) > 1 and not con_color
+    es_mapa = bool(fig.layout.map and fig.layout.map.style)
+    extra = (48 if con_color else 0) + (34 if con_leyenda else 0)
+    fig.update_layout(
+        font=dict(size=11),
+        margin=dict(l=6, r=6, t=extra + 8, b=6),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, x=0, xanchor="left",
+                    font=dict(size=10), title_text=""),
+    )
+    if not es_mapa:
+        fig.update_xaxes(automargin=True, title_font=dict(size=11), tickfont=dict(size=10))
+        fig.update_yaxes(automargin=True, title_font=dict(size=11), tickfont=dict(size=10))
+    barra = dict(orientation="h", yanchor="bottom", y=1.02, x=0, xanchor="left", len=1,
+                 thickness=10, title_side="top", title_font=dict(size=10),
+                 tickfont=dict(size=9))
+    fig.update_coloraxes(colorbar=barra)
+    fig.update_traces(colorbar=barra, selector=dict(type="heatmap"))
+    for an in fig.layout.annotations or []:
+        an.font.size = 9
+    return titulo
+
+
 def _plotly_en_espanol():
-    """Todos los gráficos Plotly: coma decimal, punto de miles y sin sufijo 'k'."""
+    """Todos los gráficos Plotly: coma decimal, punto de miles y sin sufijo 'k'.
+    En celulares, además, los adapta a pantallas angostas."""
     if getattr(DeltaGenerator.plotly_chart, "_es", False):
         return
     original = DeltaGenerator.plotly_chart
@@ -68,6 +123,18 @@ def _plotly_en_espanol():
                 colorbar_exponentformat="none", selector=dict(type="heatmap"))
         except Exception:
             pass
+        if es_movil():
+            try:
+                titulo = ajustar_para_movil(figure_or_data)
+                if titulo:
+                    self.markdown(f'<div class="titulo-graf">{titulo}</div>',
+                                  unsafe_allow_html=True)
+            except Exception:
+                pass
+            config = dict(kwargs.pop("config", None) or {})
+            config.setdefault("displayModeBar", False)
+            config.setdefault("scrollZoom", False)
+            kwargs["config"] = config
         return original(self, figure_or_data, *args, **kwargs)
 
     plotly_es._es = True
@@ -109,7 +176,8 @@ def encabezado(df):
         f'<div class="kpi"><b>{f1:%d/%m/%Y}</b><span>último dato</span></div>'
         f'<div class="kpi"><b>{nprov}</b><span>provincias</span></div>'
         '</div>'
-        '<div class="solo-movil">☰ Tocá la flecha de arriba a la izquierda para abrir los filtros.</div>'
+        '<div class="solo-movil">☰ Tocá la flecha de arriba a la izquierda para abrir los '
+        'filtros. Deslizá las pestañas hacia el costado para ver todas.</div>'
     )
     st.markdown(html, unsafe_allow_html=True)
     st.warning(
