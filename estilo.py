@@ -5,6 +5,7 @@ from pathlib import Path
 import plotly.express as px
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
+from idioma import t
 
 NOMBRE = "Igneus" 
 LEMA = "Observatorio de detecciones térmicas de Argentina"
@@ -159,42 +160,30 @@ def aplicar_estilo():
 
 
 def encabezado(df):
+    es = st.session_state.get("idioma", "es") == "es"
     img = _b64(LOGO)
+    lema = t("lema")
     if img:
         marca = f'<img src="data:image/png;base64,{img}" alt="{NOMBRE}">'
-        titulo = f'<div class="hero-s">{LEMA}</div>'
+        titulo = f'<div class="hero-s">{lema}</div>'
     else:
-        marca = "<span style='font-size:2.4rem'>🔥</span>"
-        titulo = f'<div class="hero-t">{NOMBRE}</div><div class="hero-s">{LEMA}</div>'
+        marca = ""
+        titulo = f'<div class="hero-t">{NOMBRE}</div><div class="hero-s">{lema}</div>'
     f0, f1 = df["fecha"].min(), df["fecha"].max()
     nprov = df["provincia"].nunique()
+    total = _miles(len(df)) if es else f"{len(df):,}"
+    ultimo = f"{f1:%d/%m/%Y}" if es else f"{f1:%Y-%m-%d}"
     html = (
         f'<div class="hero">{marca}<div>{titulo}</div></div>'
         '<div class="kpis">'
-        f'<div class="kpi"><b>{_miles(len(df))}</b><span>detecciones en la base</span></div>'
-        f'<div class="kpi"><b>{f0:%Y}–{f1:%Y}</b><span>período cubierto</span></div>'
-        f'<div class="kpi"><b>{f1:%d/%m/%Y}</b><span>último dato</span></div>'
-        f'<div class="kpi"><b>{nprov}</b><span>provincias</span></div>'
+        f'<div class="kpi"><b>{total}</b><span>{t("kpi_det")}</span></div>'
+        f'<div class="kpi"><b>{f0:%Y}–{f1:%Y}</b><span>{t("kpi_periodo")}</span></div>'
+        f'<div class="kpi"><b>{ultimo}</b><span>{t("kpi_ultimo")}</span></div>'
+        f'<div class="kpi"><b>{nprov}</b><span>{t("kpi_prov")}</span></div>'
         '</div>'
-        '<div class="solo-movil">☰ Tocá la flecha de arriba a la izquierda para abrir los '
-        'filtros. Deslizá las pestañas hacia el costado para ver todas.</div>'
+        f'<div class="solo-movil">{t("movil")}</div>'
     )
     st.markdown(html, unsafe_allow_html=True)
-    st.warning(
-        "⚠️ Un foco de calor es una anomalía térmica detectada desde el espacio, "
-        "no un incendio confirmado. IGNEUS analiza patrones históricos "
-        "(2000–2026) y no predice eventos futuros."
-    )
-    with st.expander("Ver aviso científico completo"):
-        st.markdown(
-            "Un foco de calor (anomalía térmica infrarroja detectada desde el espacio) "
-            "no equivale a un incendio forestal confirmado en terreno. Se filtraron los "
-            "registros descartando volcanes, industrias y fuentes fijas para conservar "
-            "exclusivamente la categoría estándar FIRMS de presunta vegetación bajo "
-            "validación científica (type == 0) que aplica al catálogo Archive (2000–2025), "
-            "ya que el tramo NRT reciente de 2026 no trae clasificación de tipo de fuente. "
-            "Asimismo, los sensores satelitales no pueden distinguir de forma automatizada "
-            "entre un incendio silvestre descontrolado y una quema agrícola autorizada. "
-            "IGNEUS analiza patrones estadísticos e históricos (2000–2026), pero no "
-            "realiza predicciones de eventos futuros."
-        )
+    st.warning(t("aviso_corto"))
+    with st.expander(t("aviso_ver")):
+        st.markdown(t("aviso_largo"))

@@ -16,6 +16,7 @@ from extras import (
 from estilo import NOMBRE, ICONO, aplicar_estilo, encabezado
 import armonizacion as arm
 import asistente as ia
+from idioma import t, selector_idioma, region_txt, num, formato_fecha
 
 st.set_page_config(
     page_title=f"{NOMBRE} · Focos de calor",
@@ -63,6 +64,8 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
+selector_idioma()
 
 COLUMNAS = [
     "sensor", "fecha", "latitud", "longitud", "confianza", "es_prueba",
@@ -119,38 +122,37 @@ def preparar_asistente(_df, _h_arm, version):
 encabezado(df)
 
 if df["es_prueba"].any():
-    st.info("Estás viendo datos de PRUEBA, no datos reales.")
+    st.info(t("prueba"))
 
 # ---------- Barra lateral: filtros ----------
-st.sidebar.header("Filtros")
+st.sidebar.header(t("filtros"))
 
 armonizado = st.sidebar.checkbox(
-    "Quitar duplicados entre sensores", value=True,
-    help="Une las detecciones de MODIS y VIIRS en el mismo lugar y día. "
-         "La armonización de la serie entre satélites está en la pestaña 'Armonización'.",
+    t("quitar_dup"), value=True, help=t("quitar_dup_help"),
 )
 
 lista_sensores = sorted(map(str, df["sensor"].unique()))
-sensores = st.sidebar.multiselect("Sensor", lista_sensores, default=lista_sensores)
+sensores = st.sidebar.multiselect(t("sensor"), lista_sensores, default=lista_sensores)
 
 fmin = df["fecha"].min().date()
 fmax = df["fecha"].max().date()
 rango = st.sidebar.date_input(
-    "Rango de fechas", value=(fmin, fmax), min_value=fmin, max_value=fmax
+    t("rango"), value=(fmin, fmax), min_value=fmin, max_value=fmax,
+    format=formato_fecha(),
 )
 if isinstance(rango, (list, tuple)) and len(rango) == 2:
     desde, hasta = rango
 else:
     desde, hasta = fmin, fmax
 
-regiones = ["Toda Argentina"] + sorted(map(str, df["region"].unique()))
-region = st.sidebar.selectbox("Región", regiones)
-if region == "Toda Argentina":
+regiones = [t("toda_arg")] + sorted(map(str, df["region"].unique()))
+region = st.sidebar.selectbox(t("region"), regiones, format_func=region_txt)
+if region == t("toda_arg"):
     provs_disp = sorted(map(str, df["provincia"].unique()))
 else:
     provs_disp = sorted(map(str, df.loc[df["region"] == region, "provincia"].unique()))
 provincias = st.sidebar.multiselect(
-    "Provincia", provs_disp, default=provs_disp, key=f"prov_{region}"
+    t("provincia"), provs_disp, default=provs_disp, key=f"prov_{region}"
 )
 
 # Un único DataFrame filtrado que alimenta TODO lo demás
@@ -165,23 +167,20 @@ if armonizado:
 df_f = df[mask]
 _dias = df["fecha"].drop_duplicates().sort_values().diff().dt.days
 if _dias.max() > 10:
-    st.warning(
-        f"Hay un tramo de {int(_dias.max())} días sin datos en la base. "
-        "Los conteos de ese período no son confiables."
-    )
+    st.warning(t("tramo", dias=int(_dias.max())))
 
-st.sidebar.write(f"Detecciones mostradas: **{len(df_f):,}** de {len(df):,}")
+st.sidebar.write(t("det_mostradas", n=num(len(df_f)), total=num(len(df))))
 
 # ---------- Contenido ----------
 if df_f.empty:
-    st.error("No hay detecciones con esos filtros.")
+    st.error(t("sin_det"))
     st.stop()
 
 (tab_mapa, tab_cerca, tab_arm, tab_ia, tab_graf, tab_cal, tab_enso, tab_gases,
  tab_origen, tab_quemas, tab_metodo, tab_datos) = st.tabs([
-    "Mapa", "Cerca de mí", "Armonización", "Asistente IA", "Gráficos", "Calendario",
-    "El Niño / La Niña", "Gases de carbono", "Origen (inferido)", "Quemas",
-    "Método y fuentes", "Datos",
+    t("tab_mapa"), t("tab_cerca"), t("tab_arm"), t("tab_ia"), t("tab_graf"),
+    t("tab_cal"), t("tab_enso"), t("tab_gases"), t("tab_origen"), t("tab_quemas"),
+    t("tab_metodo"), t("tab_datos"),
 ])
 
 with tab_ia:
@@ -256,28 +255,27 @@ with tab_ia:
         st.text(datos_ia)
 
 with tab_mapa:
-    st.subheader("Mapa de detecciones térmicas")
+    st.subheader(t("mapa_titulo"))
     c1, c2 = st.columns(2)
-    modo = c1.radio("Qué puntos mostrar", ["Más recientes", "Muestra aleatoria"],
-                    horizontal=True)
-    max_pts = c2.slider("Cantidad máxima de puntos", 1000, 50000, 20000, 1000)
+    modo = c1.radio(t("mapa_modo"), ["recientes", "aleatoria"],
+                    format_func=lambda k: t("modo_" + k), horizontal=True)
+    max_pts = c2.slider(t("mapa_max"), 1000, 50000, 20000, 1000)
     df_mapa = df_f
     if len(df_f) > max_pts:
-        if modo == "Más recientes":
+        if modo == "recientes":
             df_mapa = df_f.nlargest(max_pts, "fecha")
         else:
             df_mapa = df_f.sample(max_pts, random_state=1)
-        st.caption(
-            f"Se muestran {max_pts:,} de {len(df_f):,} detecciones ({modo.lower()}). "
-            "Los gráficos y conteos usan TODAS las detecciones filtradas. "
-            "Acotá fechas o provincia para ver todos los puntos en el mapa."
-        )
+        st.caption(t("mapa_nota", n=num(max_pts), total=num(len(df_f)),
+                     modo=t("modo_" + modo).lower()))
     fig_mapa = px.scatter_map(
         df_mapa,
         lat="latitud",
         lon="longitud",
         color="sensor",
         hover_data=["fecha", "provincia", "confianza"],
+        labels={"sensor": t("sensor"), "fecha": t("col_fecha"),
+                "provincia": t("provincia"), "confianza": t("col_confianza")},
         zoom=3.5,
         center={"lat": -38.5, "lon": -64.0},
         height=550,
@@ -286,14 +284,12 @@ with tab_mapa:
     st.plotly_chart(fig_mapa, use_container_width=True)
 
 with tab_cal:
-    st.subheader("Calendario de actividad térmica")
+    st.subheader(t("cal_titulo"))
     anios = sorted(df_f["fecha"].dt.year.unique(), reverse=True)
-    anio = st.selectbox("Año", anios)
+    anio = st.selectbox(t("cal_anio"), anios)
     st.plotly_chart(grafico_calendario(df_f, int(anio)), use_container_width=True)
     st.plotly_chart(grafico_anio_mes(df_f), use_container_width=True)
-    st.caption(
-        "Cada valor es un conteo de detecciones térmicas, no de incendios confirmados."
-    )
+    st.caption(t("cal_nota"))
 
 with tab_arm:
     st.subheader("Serie armonizada entre satélites (2000 en adelante)")
