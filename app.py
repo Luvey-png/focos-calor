@@ -32,20 +32,16 @@ COLUMNAS = [
 @st.cache_resource
 def cargar_datos(version):
     ruta = Path("data/focos_real.parquet")
+    rec = Path("data/focos_recientes.parquet")
+
     if ruta.exists():
         disponibles = pq.read_schema(ruta).names
         cols = [c for c in COLUMNAS if c in disponibles]
         df = pd.read_parquet(ruta, columns=cols)
     else:
         df = pd.read_csv("data/focos_prueba.csv", parse_dates=["fecha"])
-    for c in ("region", "provincia", "senal"):
-        if c not in df.columns:
-            df[c] = "Sin dato"
-    if "es_duplicado" not in df.columns:
-        df["es_duplicado"] = False
-        for c in ("latitud", "longitud", "frp"):
-            if c in df.columns:
-                    rec = Path("data/focos_recientes.parquet")
+
+    # Sumar los datos recientes (solo los posteriores al último día del histórico)
     if ruta.exists() and rec.exists():
         r = pd.read_parquet(rec)
         r = r[r["fecha"] > df["fecha"].max()]
@@ -55,11 +51,17 @@ def cargar_datos(version):
                 cats = df[c].cat.categories.union(pd.Index(r[c].astype(str).unique()))
                 df[c] = df[c].cat.set_categories(cats)
                 r[c] = pd.Categorical(r[c].astype(str), categories=cats)
-                df = pd.concat([df, r], ignore_index=True)
-                df[c] = df[c].astype("float32")
+        df = pd.concat([df, r], ignore_index=True)
+
+    for c in ("region", "provincia", "senal"):
+        if c not in df.columns:
+            df[c] = "Sin dato"
+    if "es_duplicado" not in df.columns:
+        df["es_duplicado"] = False
+    for c in ("latitud", "longitud", "frp"):
+        if c in df.columns:
+            df[c] = df[c].astype("float32")
     return df
-
-
 _rutas = [Path("data/focos_real.parquet"), Path("data/focos_recientes.parquet")]
 df = cargar_datos(tuple(p.stat().st_mtime if p.exists() else 0 for p in _rutas))
 
@@ -122,13 +124,20 @@ if df_f.empty:
 
 with tab_mapa:
     st.subheader("Mapa de detecciones térmicas")
-    MAX_PUNTOS = 20000
+    c1, c2 = st.columns(2)
+    modo = c1.radio("Qué puntos mostrar", ["Más recientes", "Muestra aleatoria"],
+                    horizontal=True)
+    max_pts = c2.slider("Cantidad máxima de puntos", 1000, 50000, 20000, 1000)
     df_mapa = df_f
-    if len(df_f) > MAX_PUNTOS:
-        df_mapa = df_f.sample(MAX_PUNTOS, random_state=1)
+    if len(df_f) > max_pts:
+        if modo == "Más recientes":
+            df_mapa = df_f.nlargest(max_pts, "fecha")
+        else:
+            df_mapa = df_f.sample(max_pts, random_state=1)
         st.caption(
-            f"Se muestran {MAX_PUNTOS:,} puntos al azar de {len(df_f):,}. "
-            "Acotá fechas, sensor o provincia para ver más detalle."
+            f"Se muestran {max_pts:,} de {len(df_f):,} detecciones ({modo.lower()}). "
+            "Los gráficos y conteos usan TODAS las detecciones filtradas. "
+            "Acotá fechas o provincia para ver todos los puntos en el mapa."
         )
     fig_mapa = px.scatter_map(
         df_mapa,
