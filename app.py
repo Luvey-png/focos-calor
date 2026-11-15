@@ -102,13 +102,14 @@ def cargar_datos(version):
     if ruta.exists() and rec.exists():
         r = pd.read_parquet(rec)
         r = r[r["fecha"] > df["fecha"].max()]
-        r = r[[c for c in df.columns if c in r.columns]]
-        for c in df.columns:
-            if str(df[c].dtype) == "category" and c in r.columns:
-                cats = df[c].cat.categories.union(pd.Index(r[c].astype(str).unique()))
-                df[c] = df[c].cat.set_categories(cats)
-                r[c] = pd.Categorical(r[c].astype(str), categories=cats)
-        df = pd.concat([df, r], ignore_index=True)
+        if len(r):
+            r = r[[c for c in df.columns if c in r.columns]]
+            for c in df.columns:
+                if str(df[c].dtype) == "category" and c in r.columns:
+                    cats = df[c].cat.categories.union(pd.Index(r[c].astype(str).unique()))
+                    df[c] = df[c].cat.set_categories(cats)
+                    r[c] = pd.Categorical(r[c].astype(str), categories=cats)
+            df = pd.concat([df, r], ignore_index=True)
 
     for c in ("region", "provincia", "senal"):
         if c not in df.columns:
@@ -135,6 +136,9 @@ def preparar_armonizacion(_df, version):
 @st.cache_resource
 def preparar_asistente(_df, _h_arm, version):
     return ia.resumen_provincias(_h_arm, _df), ia.resumen_lugares(_df)
+@st.cache_data(show_spinner=False, max_entries=10)
+def contexto_ia(_h, _df, provincias, desde, hasta, _tprov, _tlug, _val, version):
+    return ia.contexto(_h, _df, list(provincias), desde, hasta, _tprov, _tlug, _val)
 
 
 encabezado(df)
@@ -206,7 +210,7 @@ with tab_ia:
     st.caption(t("ia_caption"))
     _m, _h, (_val, _, _) = preparar_armonizacion(df, _version)
     _tprov, _tlug = preparar_asistente(df, _h, _version)
-    datos_ia = ia.contexto(_h, df, provincias, desde, hasta, _tprov, _tlug, _val)
+    datos_ia = contexto_ia(_h, df, tuple(provincias), desde, hasta, _tprov, _tlug, _val, _version)
     proveedor, clave_ia, modelo_ia = ia.configuracion(st.secrets)
 
     if "chat" not in st.session_state:
