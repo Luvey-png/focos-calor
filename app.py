@@ -24,11 +24,51 @@ st.set_page_config(
 )
 aplicar_estilo()
 
+aplicar_estilo()
+
+st.markdown("""
+<style>
+[role="tablist"] {
+    gap: 8px !important;
+    padding: 8px 8px 16px 8px !important;
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,107,53,0.35) !important;
+    border-radius: 14px !important;
+}
+[data-baseweb="tab-border"] { display: none !important; }
+[data-baseweb="tab-highlight"] {
+    display: block !important;
+    background: #ffd60a !important;
+    height: 4px !important;
+    bottom: 4px !important;
+    border-radius: 4px !important;
+}
+[role="tab"], [data-baseweb="tab"] {
+    background: rgba(255,107,53,0.12) !important;
+    border: 1px solid rgba(255,107,53,0.40) !important;
+    border-radius: 10px !important;
+    padding: 8px 14px !important;
+    height: auto !important;
+}
+[role="tab"]:hover, [data-baseweb="tab"]:hover {
+    background: rgba(255,60,30,0.30) !important;
+}
+[role="tab"][aria-selected="true"], [data-baseweb="tab"][aria-selected="true"] {
+    background: linear-gradient(180deg, #ff3d00 0%, #c1121f 100%) !important;
+    border: 2px solid #ffd60a !important;
+    box-shadow: 0 0 14px rgba(255,61,0,0.75) !important;
+}
+[role="tab"][aria-selected="true"], [role="tab"][aria-selected="true"] * {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 COLUMNAS = [
     "sensor", "fecha", "latitud", "longitud", "confianza", "es_prueba",
     "satelite", "frp", "diurno", "provincia", "region", "es_duplicado", "senal",
 ]
-
 
 @st.cache_resource
 def cargar_datos(version):
