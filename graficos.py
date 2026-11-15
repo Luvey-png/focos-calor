@@ -1,10 +1,29 @@
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import streamlit as st
 
+from idioma import t
+
+# Se mantienen en español porque otros módulos (extras.py) los importan.
 DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
          "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+DIAS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+MESES_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _en():
+    return st.session_state.get("idioma", "en") == "en"
+
+
+def meses():
+    return MESES_EN if _en() else MESES
+
+
+def dias():
+    return DIAS_EN if _en() else DIAS
 
 
 def grafico_mensual(df):
@@ -19,7 +38,8 @@ def grafico_mensual(df):
     )
     return px.line(
         conteo, x="mes", y="detecciones", color="sensor",
-        title="Detecciones térmicas por mes y sensor",
+        title=t("g_t_mensual"),
+        labels={"mes": t("g_mes"), "detecciones": t("g_det"), "sensor": t("g_sensor")},
     )
 
 
@@ -27,38 +47,39 @@ def grafico_calendario(df, anio):
     """Calendario diario de un año: un cuadrado por día."""
     d = df[df["fecha"].dt.year == anio]
     por_dia = d.groupby("fecha").size()
-    dias = pd.date_range(f"{anio}-01-01", f"{anio}-12-31")
-    por_dia = por_dia.reindex(dias, fill_value=0)
+    dias_anio = pd.date_range(f"{anio}-01-01", f"{anio}-12-31")
+    por_dia = por_dia.reindex(dias_anio, fill_value=0)
 
     c = por_dia.rename("detecciones").rename_axis("fecha").reset_index()
-    offset = dias[0].weekday()
+    offset = dias_anio[0].weekday()
     c["semana"] = (c["fecha"].dt.dayofyear - 1 + offset) // 7
     c["dia_sem"] = c["fecha"].dt.weekday
-    c["texto"] = c["fecha"].dt.strftime("%d/%m/%Y")
+    c["texto"] = c["fecha"].dt.strftime("%Y-%m-%d" if _en() else "%d/%m/%Y")
 
     z = c.pivot(index="dia_sem", columns="semana", values="detecciones")
-    t = c.pivot(index="dia_sem", columns="semana", values="texto")
+    tx = c.pivot(index="dia_sem", columns="semana", values="texto")
 
     fig = go.Figure(go.Heatmap(
         z=z.values, x=z.columns, y=list(range(7)),
-        customdata=t.values,
-                hovertemplate="%{customdata}<br>%{z:,d} detecciones<extra></extra>",
+        customdata=tx.values,
+        hovertemplate="%{customdata}<br>%{z:,d} " + t("g_det_lc") + "<extra></extra>",
         colorscale="YlOrRd", xgap=2, ygap=2,
-        colorbar=dict(title="Detecciones"),
+        colorbar=dict(title=t("g_det")),
     ))
     # etiquetas de mes sobre el eje X (semana en que empieza cada mes)
+    ms = meses()
     inicio_mes = c[c["fecha"].dt.day == 1]
     fig.update_xaxes(
         tickvals=inicio_mes["semana"].tolist(),
-        ticktext=[MESES[m - 1] for m in inicio_mes["fecha"].dt.month],
+        ticktext=[ms[m - 1] for m in inicio_mes["fecha"].dt.month],
         showgrid=False,
     )
     fig.update_yaxes(
-        tickvals=list(range(7)), ticktext=DIAS,
+        tickvals=list(range(7)), ticktext=dias(),
         autorange="reversed", showgrid=False,
     )
     fig.update_layout(
-        title=f"Calendario de detecciones térmicas {anio}",
+        title=t("g_t_cal", anio=anio),
         height=300, margin=dict(l=40, r=20, t=60, b=30),
     )
     return fig
@@ -67,17 +88,21 @@ def grafico_calendario(df, anio):
 def grafico_anio_mes(df):
     """Mapa de calor: filas = años, columnas = meses."""
     d = pd.DataFrame({"anio": df["fecha"].dt.year, "mes": df["fecha"].dt.month})
-    t = d.groupby(["anio", "mes"]).size().unstack(fill_value=0)
-    t = t.reindex(columns=range(1, 13), fill_value=0)
+    tab = d.groupby(["anio", "mes"]).size().unstack(fill_value=0)
+    tab = tab.reindex(columns=range(1, 13), fill_value=0)
     fig = px.imshow(
-        t.values, x=MESES, y=t.index.astype(str),
+        tab.values, x=meses(), y=tab.index.astype(str),
         color_continuous_scale="YlOrRd", aspect="auto",
-        labels=dict(x="Mes", y="Año", color="Detecciones"),
-        title="Actividad térmica por año y mes",
+        labels=dict(x=t("g_mes"), y=t("g_anio"), color=t("g_det")),
+        title=t("g_t_anio_mes"),
     )
-    fig.update_layout(height=max(350, 22 * len(t)))
-    fig.update_traces(hovertemplate="Año %{y} · %{x}<br>%{z:,d} detecciones<extra></extra>")
+    fig.update_layout(height=max(350, 22 * len(tab)))
+    fig.update_traces(
+        hovertemplate=t("g_anio") + " %{y} · %{x}<br>%{z:,d} "
+        + t("g_det_lc") + "<extra></extra>"
+    )
     return fig
+
 
 def grafico_comparacion_sensores(df):
     """MODIS vs VIIRS: detecciones por año, una barra por sensor."""
@@ -85,8 +110,8 @@ def grafico_comparacion_sensores(df):
     conteo = d.groupby(["anio", "sensor"]).size().reset_index(name="detecciones")
     fig = px.bar(
         conteo, x="anio", y="detecciones", color="sensor", barmode="group",
-        title="Detecciones por año y sensor",
-        labels={"anio": "Año", "detecciones": "Detecciones"},
+        title=t("g_t_comp"),
+        labels={"anio": t("g_anio"), "detecciones": t("g_det"), "sensor": t("g_sensor")},
     )
     fig.update_xaxes(dtick=1)
     return fig
@@ -95,16 +120,19 @@ def grafico_comparacion_sensores(df):
 def grafico_estacionalidad(df):
     """Detecciones por mes del año (todos los años juntos), por sensor.
     Muestra en qué época del año hay más actividad."""
+    ms = meses()
     d = pd.DataFrame({"mes": df["fecha"].dt.month, "sensor": df["sensor"].astype(str)})
     conteo = d.groupby(["mes", "sensor"]).size().reset_index(name="detecciones")
-    conteo["mes_nombre"] = conteo["mes"].map(lambda m: MESES[m - 1])
+    conteo["mes_nombre"] = conteo["mes"].map(lambda m: ms[m - 1])
     fig = px.line(
         conteo, x="mes_nombre", y="detecciones", color="sensor", markers=True,
-        category_orders={"mes_nombre": MESES},
-        title="Estacionalidad: detecciones por mes del año",
-        labels={"mes_nombre": "Mes", "detecciones": "Detecciones"},
+        category_orders={"mes_nombre": ms},
+        title=t("g_t_estac"),
+        labels={"mes_nombre": t("g_mes"), "detecciones": t("g_det"),
+                "sensor": t("g_sensor")},
     )
     return fig
+
 
 def grafico_confianza(df):
     """Distribución de confianza por sensor (en porcentaje)."""
@@ -114,33 +142,46 @@ def grafico_confianza(df):
     })
     conteo = d.groupby(["sensor", "confianza"]).size().reset_index(name="n")
     conteo["porcentaje"] = conteo["n"] / conteo.groupby("sensor")["n"].transform("sum") * 100
+    niveles = ["baja", "nominal", "alta", "desconocida"]
+    nombres = {n: t("g_conf_" + n) for n in niveles}
+    conteo["confianza"] = conteo["confianza"].map(lambda x: nombres.get(x, x))
     fig = px.bar(
         conteo, x="sensor", y="porcentaje", color="confianza",
-        category_orders={"confianza": ["baja", "nominal", "alta", "desconocida"]},
-        title="Distribución de confianza por sensor (%)",
-        labels={"porcentaje": "% de detecciones"},
+        category_orders={"confianza": list(nombres.values())},
+        title=t("g_t_conf"),
+        labels={"porcentaje": t("g_pct_det"), "confianza": t("g_confianza"),
+                "sensor": t("g_sensor")},
     )
     return fig
+
 
 def grafico_provincias(df):
     """Detecciones por provincia."""
     c = (df.groupby("provincia", observed=True).size()
          .reset_index(name="detecciones").sort_values("detecciones"))
     return px.bar(c, x="detecciones", y="provincia", orientation="h",
-                  title="Detecciones térmicas por provincia",
+                  title=t("g_t_prov"),
+                  labels={"detecciones": t("g_det"), "provincia": t("g_provincia")},
                   height=max(350, 24 * len(c)))
 
+
 ANIOS_SIN_DATO = (2005, 2010, 2016)  # vaciar con () cuando A1 entregue MODIS completo
+# Las fases son claves internas (en español); lo que se ve sale de t(...)
 COLORES_FASE = {"El Niño": "#d62728", "La Niña": "#1f77b4", "Neutro": "#9e9e9e"}
+FASE_CLAVE = {"El Niño": "g_f_nino", "La Niña": "g_f_nina", "Neutro": "g_f_neutro"}
 ORDEN_TRIM = ["DJF", "JFM", "FMA", "MAM", "AMJ", "MJJ",
               "JJA", "JAS", "ASO", "SON", "OND", "NDJ"]
+
+
+def _fase_txt(f):
+    return t(FASE_CLAVE[f])
 
 
 def cargar_oni(ruta="data/oni.txt", rezago=0):
     """Lee el índice de NOAA y clasifica cada mes en El Niño / La Niña / Neutro."""
     d = pd.read_csv(ruta, sep=r"\s+")
     if "SEAS" not in d.columns:
-        raise ValueError("Formato inesperado en oni.txt; revisá las primeras líneas.")
+        raise ValueError("Unexpected format in oni.txt; check the first lines.")
     d = d[d["SEAS"].isin(ORDEN_TRIM)].reset_index(drop=True)
     valor = pd.to_numeric(d.iloc[:, -1], errors="coerce")
     centro = {s: i + 1 for i, s in enumerate(ORDEN_TRIM)}  # DJF -> enero, etc.
@@ -173,23 +214,23 @@ def _conteo_mensual(df):
 def grafico_enso_mensual(df, oni):
     """Serie mensual de detecciones con bandas de El Niño / La Niña."""
     c = _conteo_mensual(df)
-    fig = px.line(c, x="fecha", y="detecciones",
-                  title="Detecciones mensuales y fases de El Niño / La Niña")
+    fig = px.line(c, x="fecha", y="detecciones", title=t("g_t_enso_m"),
+                  labels={"fecha": t("g_fecha"), "detecciones": t("g_det")})
     o = oni[(oni["fecha"] >= c["fecha"].min()) & (oni["fecha"] <= c["fecha"].max())]
     o = o.reset_index(drop=True)
     grupo = (o["fase"] != o["fase"].shift()).cumsum()
-    for _, t in o.groupby(grupo):
-        fase = t["fase"].iloc[0]
+    for _, tr in o.groupby(grupo):
+        fase = tr["fase"].iloc[0]
         if fase == "Neutro":
             continue
-        x1 = t["fecha"].iloc[-1] + pd.DateOffset(months=1)
+        x1 = tr["fecha"].iloc[-1] + pd.DateOffset(months=1)
         fig.add_vrect(
-            x0=t["fecha"].iloc[0].strftime("%Y-%m-%d"), x1=x1.strftime("%Y-%m-%d"),
+            x0=tr["fecha"].iloc[0].strftime("%Y-%m-%d"), x1=x1.strftime("%Y-%m-%d"),
             fillcolor=COLORES_FASE[fase], opacity=0.18, line_width=0, layer="below",
         )
     for fase in ("El Niño", "La Niña"):  # leyenda de las bandas
         fig.add_trace(go.Scatter(
-            x=[None], y=[None], mode="markers", name=fase,
+            x=[None], y=[None], mode="markers", name=_fase_txt(fase),
             marker=dict(size=10, color=COLORES_FASE[fase])))
     fig.update_layout(height=420, legend_title_text="")
     return fig
@@ -203,13 +244,14 @@ def grafico_enso_fases(df, oni):
     c["indice"] = c["detecciones"] / c.groupby("mes")["detecciones"].transform("mean")
     c = c.merge(oni[["fecha", "fase"]], on="fecha", how="inner")
     n = c["fase"].value_counts()
-    c["etiqueta"] = c["fase"].map(lambda f: f"{f} (n={n[f]} meses)")
-    orden = [f"{f} (n={n[f]} meses)" for f in ("El Niño", "Neutro", "La Niña") if f in n]
+    c["etiqueta"] = c["fase"].map(lambda f: t("g_etq_fase", fase=_fase_txt(f), n=n[f]))
+    orden = [t("g_etq_fase", fase=_fase_txt(f), n=n[f])
+             for f in ("El Niño", "Neutro", "La Niña") if f in n]
     fig = px.box(
         c, x="etiqueta", y="indice", color="fase", points="all",
         color_discrete_map=COLORES_FASE, category_orders={"etiqueta": orden},
-        title="Actividad relativa según la fase (1 = típico para ese mes)",
-        labels={"etiqueta": "", "indice": "Actividad relativa"},
+        title=t("g_t_enso_f"),
+        labels={"etiqueta": "", "indice": t("g_act_rel"), "fase": t("g_fase")},
     )
     fig.add_hline(y=1, line_dash="dash")
     fig.update_layout(showlegend=False, height=450)

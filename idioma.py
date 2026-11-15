@@ -415,3 +415,43 @@ TEXTOS["en"].update({
     "d_btn": "Prepare download (up to the 200,000 most recent rows)",
     "d_dl": "Download CSV",
 })
+
+TEXTOS["es"].update({
+    "g_mes": "Mes", "g_det": "Detecciones", "g_det_lc": "detecciones",
+    "g_sensor": "Sensor", "g_anio": "Año", "g_fecha": "Fecha",
+    "g_pct_det": "% de detecciones", "g_confianza": "Confianza",
+    "g_provincia": "Provincia", "g_fase": "Fase", "g_act_rel": "Actividad relativa",
+    "g_t_mensual": "Detecciones térmicas por mes y sensor",
+    "g_t_cal": "Calendario de detecciones térmicas {anio}",
+    "g_t_anio_mes": "Actividad térmica por año y mes",
+    "g_t_comp": "Detecciones por año y sensor",
+    "g_t_estac": "Estacionalidad: detecciones por mes del año",
+    "g_t_conf": "Distribución de confianza por sensor (%)",
+    "g_t_prov": "Detecciones térmicas por provincia",
+    "g_t_enso_m": "Detecciones mensuales y fases de El Niño / La Niña",
+    "g_t_enso_f": "Actividad relativa según la fase (1 = típico para ese mes)",
+    "g_conf_baja": "baja", "g_conf_nominal": "nominal", "g_conf_alta": "alta",
+    "g_conf_desconocida": "desconocida",
+    "g_f_nino": "El Niño", "g_f_nina": "La Niña", "g_f_neutro": "Neutro",
+    "g_etq_fase": "{fase} (n={n} meses)",
+})
+
+TEXTOS["en"].update({
+    "g_mes": "Month", "g_det": "Detections", "g_det_lc": "detections",
+    "g_sensor": "Sensor", "g_anio": "Year", "g_fecha": "Date",
+    "g_pct_det": "% of detections", "g_confianza": "Confidence",
+    "g_provincia": "Province", "g_fase": "Phase", "g_act_rel": "Relative activity",
+    "g_t_mensual": "Thermal detections per month and sensor",
+    "g_t_cal": "Thermal detections calendar {anio}",
+    "g_t_anio_mes": "Thermal activity by year and month",
+    "g_t_comp": "Detections per year and sensor",
+    "g_t_estac": "Seasonality: detections by month of the year",
+    "g_t_conf": "Confidence distribution by sensor (%)",
+    "g_t_prov": "Thermal detections by province",
+    "g_t_enso_m": "Monthly detections and El Niño / La Niña phases",
+    "g_t_enso_f": "Relative activity by phase (1 = typical for that month)",
+    "g_conf_baja": "low", "g_conf_nominal": "nominal", "g_conf_alta": "high",
+    "g_conf_desconocida": "unknown",
+    "g_f_nino": "El Niño", "g_f_nina": "La Niña", "g_f_neutro": "Neutral",
+    "g_etq_fase": "{fase} (n={n} months)",
+})
