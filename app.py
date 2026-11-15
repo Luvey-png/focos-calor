@@ -45,12 +45,23 @@ def cargar_datos(version):
         df["es_duplicado"] = False
         for c in ("latitud", "longitud", "frp"):
             if c in df.columns:
+                    rec = Path("data/focos_recientes.parquet")
+    if ruta.exists() and rec.exists():
+        r = pd.read_parquet(rec)
+        r = r[r["fecha"] > df["fecha"].max()]
+        r = r[[c for c in df.columns if c in r.columns]]
+        for c in df.columns:
+            if str(df[c].dtype) == "category" and c in r.columns:
+                cats = df[c].cat.categories.union(pd.Index(r[c].astype(str).unique()))
+                df[c] = df[c].cat.set_categories(cats)
+                r[c] = pd.Categorical(r[c].astype(str), categories=cats)
+                df = pd.concat([df, r], ignore_index=True)
                 df[c] = df[c].astype("float32")
     return df
 
 
-_ruta = Path("data/focos_real.parquet")
-df = cargar_datos(_ruta.stat().st_mtime if _ruta.exists() else 0)
+_rutas = [Path("data/focos_real.parquet"), Path("data/focos_recientes.parquet")]
+df = cargar_datos(tuple(p.stat().st_mtime if p.exists() else 0 for p in _rutas))
 
 if df["es_prueba"].any():
     st.info("Estás viendo datos de PRUEBA, no datos reales.")
