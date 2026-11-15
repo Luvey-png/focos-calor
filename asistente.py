@@ -294,3 +294,24 @@ def resumen_sin_ia(h_arm, df, provincias, desde, hasta, tabla_prov):
         txt.append("**Provincias con más actividad reciente:** " + ", ".join(
             f"{r.provincia} ({getattr(r, col)})" for r in t.itertuples()) + ".")
     return "\n\n".join(txt)
+
+# ---------- Respaldo automático entre modelos (Gemini) ----------
+MODELOS_RESPALDO = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
+_responder_base = responder
+
+
+def responder(pregunta, historial, datos, proveedor, clave, modelo, max_tokens=900):
+    if proveedor != "gemini":
+        return _responder_base(pregunta, historial, datos, proveedor, clave, modelo, max_tokens)
+    orden = [modelo] + [m for m in MODELOS_RESPALDO if m != modelo]
+    ultimo = None
+    for m in orden:
+        try:
+            return _responder_base(pregunta, historial, datos, proveedor, clave, m, max_tokens)
+        except requests.exceptions.HTTPError as e:
+            ultimo = e
+            if e.response is None or e.response.status_code not in (404, 429, 500, 503):
+                raise
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            ultimo = e
+    raise ultimo

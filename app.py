@@ -194,8 +194,11 @@ with tab_ia:
                                             proveedor, clave_ia, modelo_ia)
                     except Exception as e:
                         resp = None
-                        st.error(f"No se pudo consultar al modelo ({type(e).__name__}). "
-                                 "Revisá la clave, el modelo o la conexión.")
+                        detalle = ""
+                        r_e = getattr(e, "response", None)
+                        if r_e is not None:
+                            detalle = f" Código {r_e.status_code}: {r_e.text[:300]}"
+                        st.error(f"No se pudo consultar al modelo ({type(e).__name__}).{detalle}")
                 if resp:
                     st.markdown(resp)
             if resp:
