@@ -83,8 +83,9 @@ def main():
     out = pd.concat(partes).sort_values("fecha")
     for c in ["sensor", "confianza", "confianza_original", "satelite",
               "diurno", "provincia", "region"]:
-        out[c] = out[c].astype(str).astype("category")
-        out = out.drop(columns=["hora"], errors="ignore")
+        if c in out.columns:
+            out[c] = out[c].astype(str).astype("category")
+    out = out.drop(columns=["hora"], errors="ignore")
     out.to_parquet(PARQUET, index=False)
 
     print(f"\nTotal antes: {total:,} | dentro de Argentina: {len(out):,} "
