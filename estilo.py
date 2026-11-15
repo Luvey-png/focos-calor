@@ -148,7 +148,7 @@ def _plotly_en_espanol():
 def aplicar_estilo():
     st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)
     px.defaults.color_discrete_sequence = [
-        "#FF6B1A", "#EC4134", "#FFB347", "#69DB7C", "#F06595", "#B197FC"]
+        "#F0FF1A", "#EC4134", "#FFB347", "#69DB7C", "#F06595", "#B197FC"]
     _plotly_en_espanol()
     img = _b64(LOGO)
     if img:
@@ -181,6 +181,20 @@ def encabezado(df):
     )
     st.markdown(html, unsafe_allow_html=True)
     st.warning(
-        "⚠️ Un foco de calor NO es un incendio confirmado. Es una detección térmica "
-        "satelital que puede tener otras causas. (Texto provisorio: Luis lo redacta.)"
+        "⚠️ Un foco de calor es una anomalía térmica detectada desde el espacio, "
+        "no un incendio confirmado. IGNEUS analiza patrones históricos "
+        "(2000–2026) y no predice eventos futuros."
     )
+    with st.expander("Ver aviso científico completo"):
+        st.markdown(
+            "Un foco de calor (anomalía térmica infrarroja detectada desde el espacio) "
+            "no equivale a un incendio forestal confirmado en terreno. Se filtraron los "
+            "registros descartando volcanes, industrias y fuentes fijas para conservar "
+            "exclusivamente la categoría estándar FIRMS de presunta vegetación bajo "
+            "validación científica (type == 0) que aplica al catálogo Archive (2000–2025), "
+            "ya que el tramo NRT reciente de 2026 no trae clasificación de tipo de fuente. "
+            "Asimismo, los sensores satelitales no pueden distinguir de forma automatizada "
+            "entre un incendio silvestre descontrolado y una quema agrícola autorizada. "
+            "IGNEUS analiza patrones estadísticos e históricos (2000–2026), pero no "
+            "realiza predicciones de eventos futuros."
+        )
