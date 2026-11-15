@@ -117,7 +117,8 @@ def _plotly_en_espanol():
 
     def plotly_es(self, figure_or_data, *args, **kwargs):
         try:
-            figure_or_data.update_layout(separators=",.")
+            _en = st.session_state.get("idioma", "en") == "en"
+            figure_or_data.update_layout(separators=".," if _en else ",.")
             figure_or_data.update_yaxes(exponentformat="none")
             figure_or_data.update_coloraxes(colorbar_exponentformat="none")
             figure_or_data.update_traces(
