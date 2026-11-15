@@ -42,7 +42,7 @@ def grafico_calendario(df, anio):
     fig = go.Figure(go.Heatmap(
         z=z.values, x=z.columns, y=list(range(7)),
         customdata=t.values,
-        hovertemplate="%{customdata}<br>%{z} detecciones<extra></extra>",
+                hovertemplate="%{customdata}<br>%{z:,d} detecciones<extra></extra>",
         colorscale="YlOrRd", xgap=2, ygap=2,
         colorbar=dict(title="Detecciones"),
     ))
@@ -76,6 +76,7 @@ def grafico_anio_mes(df):
         title="Actividad térmica por año y mes",
     )
     fig.update_layout(height=max(350, 22 * len(t)))
+    fig.update_traces(hovertemplate="Año %{y} · %{x}<br>%{z:,d} detecciones<extra></extra>")
     return fig
 
 def grafico_comparacion_sensores(df):

@@ -6,22 +6,21 @@ import pyarrow.parquet as pq
 from graficos import (
     grafico_mensual, grafico_calendario, grafico_anio_mes,
     grafico_comparacion_sensores, grafico_estacionalidad,
-    grafico_confianza, grafico_provincias, cargar_oni, grafico_enso_mensual, grafico_enso_fases
+    grafico_confianza, grafico_provincias, cargar_oni, grafico_enso_mensual, grafico_enso_fases, 
 )
 from extras import (
     LUGARES, detecciones_cercanas, mapa_cercano, grafico_estacional_zona,
-    grafico_anual_zona, cargar_quemas, marcar_quemas, resumen_quemas,
-    grafico_senales, grafico_frp_mensual, grafico_anomalias, tabla_anomalias,
+    grafico_anual_zona, cargar_quemas, marcar_quemas, resumen_quemas, guardar_quema,
+    grafico_senales, grafico_frp_mensual, grafico_anomalias, tabla_anomalias, grafico_densidad_provincias
 )
+from estilo import NOMBRE, ICONO, aplicar_estilo, encabezado
 
-st.set_page_config(page_title="Focos de calor - Argentina", layout="wide")
-st.title("Focos de calor - Argentina")
-
-st.warning(
-    "⚠️ Un foco de calor NO es un incendio confirmado. "
-    "Es una detección térmica satelital que puede tener otras causas. "
-    "(Texto provisorio: Luis lo redacta.)"
+st.set_page_config(
+    page_title=f"{NOMBRE} · Focos de calor",
+    page_icon=str(ICONO) if ICONO.exists() else "🔥",
+    layout="wide",
 )
+aplicar_estilo()
 
 COLUMNAS = [
     "sensor", "fecha", "latitud", "longitud", "confianza", "es_prueba",
@@ -64,6 +63,7 @@ def cargar_datos(version):
     return df
 _rutas = [Path("data/focos_real.parquet"), Path("data/focos_recientes.parquet")]
 df = cargar_datos(tuple(p.stat().st_mtime if p.exists() else 0 for p in _rutas))
+encabezado(df)
 
 if df["es_prueba"].any():
     st.info("Estás viendo datos de PRUEBA, no datos reales.")
@@ -108,6 +108,12 @@ mask = (
 if armonizado:
     mask &= ~df["es_duplicado"]
 df_f = df[mask]
+_dias = df["fecha"].drop_duplicates().sort_values().diff().dt.days
+if _dias.max() > 10:
+    st.warning(
+        f"Hay un tramo de {int(_dias.max())} días sin datos en la base. "
+        "Los conteos de ese período no son confiables."
+    )
 
 st.sidebar.write(f"Detecciones mostradas: **{len(df_f):,}** de {len(df):,}")
 
@@ -116,10 +122,10 @@ if df_f.empty:
     st.error("No hay detecciones con esos filtros.")
     st.stop()
 
-(tab_mapa, tab_cal, tab_graf, tab_enso, tab_cerca,
- tab_origen, tab_quemas, tab_datos) = st.tabs([
-    "Mapa", "Calendario", "Gráficos", "El Niño / La Niña",
-    "Cerca de mí", "Origen (inferido)", "Quemas declaradas", "Datos",
+(tab_mapa, tab_cal, tab_graf, tab_enso, tab_gases, tab_cerca,
+ tab_origen, tab_quemas, tab_metodo, tab_datos) = st.tabs([
+    "Mapa", "Calendario", "Gráficos", "El Niño / La Niña", "Gases de carbono",
+    "Cerca de mí", "Origen (inferido)", "Quemas", "Método y fuentes", "Datos",
 ])
 
 with tab_mapa:
@@ -163,6 +169,12 @@ with tab_cal:
     )
 
 with tab_graf:
+    ruta_sup = Path("data/superficies.csv")
+    if ruta_sup.exists():
+        st.plotly_chart(
+            grafico_densidad_provincias(df_f, pd.read_csv(ruta_sup)),
+            use_container_width=True,
+        )
     st.subheader("Comparación de sensores")
     st.plotly_chart(grafico_provincias(df_f), use_container_width=True)
     st.plotly_chart(grafico_comparacion_sensores(df_f), use_container_width=True)
@@ -292,19 +304,122 @@ with tab_origen:
         )
 
 with tab_quemas:
-    st.subheader("Quemas controladas declaradas")
+    st.subheader("Quemas controladas")
+    st.warning(
+        "Este registro reúne **declaraciones** de quemas controladas. NO es un permiso, "
+        "no reemplaza la autorización de la autoridad competente y las declaraciones "
+        "no están verificadas."
+    )
+    provs_form = sorted(map(str, df["provincia"].unique()))
+    with st.form("form_quema", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        nombre = c1.text_input("Nombre y apellido *")
+        rango = c2.text_input("Rango / cargo *")
+        organizacion = c1.text_input("Organización *")
+        permiso = c2.text_input("N° de permiso o expediente (si tiene)")
+        motivo = st.selectbox("Motivo *", [
+            "Manejo de pastizal o pastura", "Limpieza de rastrojo agrícola",
+            "Cortafuego / prevención", "Manejo de residuos vegetales",
+            "Quema prescripta (manejo del fuego)", "Otro"])
+        detalle = st.text_input("Detalle del motivo (opcional)")
+        c3, c4 = st.columns(2)
+        prov_q = c3.selectbox("Provincia *", provs_form)
+        lugar_q = c4.text_input("Lugar (paraje, campo, referencia) *")
+        ref = st.selectbox("Ubicación", ["Otro (coordenadas)"] + list(LUGARES))
+        c5, c6 = st.columns(2)
+        lat_q = c5.number_input("Latitud (si elegiste coordenadas)", value=-33.30, format="%.4f")
+        lon_q = c6.number_input("Longitud", value=-66.34, format="%.4f")
+        c7, c8, c9 = st.columns(3)
+        hoy = pd.Timestamp.today().date()
+        f_ini = c7.date_input("Inicio", value=hoy)
+        f_fin = c8.date_input("Fin", value=hoy)
+        radio_q = c9.slider("Radio aprox. (km)", 0.5, 20.0, 2.0, 0.5)
+        acepto = st.checkbox("Declaro que la información es verdadera y que cuento con la autorización correspondiente.")
+        enviar = st.form_submit_button("Registrar declaración")
+
+    if enviar:
+        obligatorios = {"nombre": nombre, "rango": rango, "organización": organizacion, "lugar": lugar_q}
+        faltan = [k for k, v in obligatorios.items() if not v.strip()]
+        if faltan:
+            st.error("Completá: " + ", ".join(faltan))
+        elif f_fin < f_ini:
+            st.error("La fecha de fin no puede ser anterior al inicio.")
+        elif (f_fin - f_ini).days > 14:
+            st.error("Una declaración puede cubrir hasta 14 días.")
+        elif not acepto:
+            st.error("Tenés que aceptar la declaración.")
+        else:
+            lat, lon = (lat_q, lon_q) if ref == "Otro (coordenadas)" else LUGARES[ref]
+            guardar_quema({
+                "provincia": prov_q, "lugar": lugar_q.strip(), "organizacion": organizacion.strip(),
+                "motivo": motivo + (f" - {detalle.strip()}" if detalle.strip() else ""),
+                "fecha_inicio": f_ini, "fecha_fin": f_fin, "latitud": lat, "longitud": lon,
+                "radio_km": radio_q, "fuente": f"Declaración de {organizacion.strip()}",
+                "es_ejemplo": False, "estado": "Declarada (sin verificar)",
+                "nombre": nombre.strip(), "rango": rango.strip(), "permiso": permiso.strip(),
+                "registrado_en": pd.Timestamp.now().isoformat(timespec="seconds"),
+            })
+            st.success("Declaración registrada. Aparece abajo y en la pestaña 'Cerca de mí'.")
+
     quemas = cargar_quemas()
     if quemas.empty:
-        st.info("No hay quemas cargadas en data/quemas_autorizadas.csv.")
+        st.info("Todavía no hay quemas declaradas.")
     else:
-        if "es_ejemplo" in quemas.columns and quemas["es_ejemplo"].any():
-            st.warning("La tabla incluye datos de EJEMPLO inventados.")
         st.dataframe(resumen_quemas(df, quemas), hide_index=True)
     st.caption(
-        "Cada fila es una quema declarada por una autoridad (con su fuente). "
+        "El nombre, el rango y el permiso se guardan para trazabilidad y no se muestran. "
         "'detecciones_en_zona' cuenta detecciones satelitales en ese radio y fechas."
     )
-    
+
+    with st.expander("Administración (solo equipo)"):
+        clave = st.text_input("Clave", type="password")
+        try:
+            ok = bool(clave) and clave == st.secrets["ADMIN_KEY"]
+        except Exception:
+            ok = False
+        if ok:
+            p = Path("data/quemas_declaradas.csv")
+            if p.exists():
+                st.download_button("Descargar registro completo", p.read_bytes(),
+                                   "quemas_declaradas.csv", "text/csv")
+            else:
+                st.info("Todavía no hay declaraciones.")
+
+with tab_metodo:
+    st.subheader("Método, fuentes y límites")
+    sats = ", ".join(sorted(map(str, df["satelite"].unique()))) if "satelite" in df.columns else "-"
+    st.markdown(f"""
+**Datos cargados:** {len(df):,} detecciones térmicas del {df['fecha'].min():%d/%m/%Y}
+al {df['fecha'].max():%d/%m/%Y}. Satélites/sensores: {', '.join(sorted(map(str, df['sensor'].unique())))}
+(satélites: {sats}).
+
+**Fuentes**
+- Detecciones térmicas: NASA FIRMS (MODIS y VIIRS), solo clase vegetación.
+- Límites provinciales: API Georef del gobierno argentino.
+- Fases El Niño / La Niña: Oceanic Niño Index de NOAA (CPC).
+
+**Procesamiento**
+1. Recorte a Argentina y asignación de provincia y región por ubicación.
+2. Confianza unificada en baja / nominal / alta (MODIS 0-100 y VIIRS l/n/h).
+3. Armonización entre sensores: una cuadrícula de 0,01° (~1 km) por día; se
+   conserva la detección de mayor confianza y FRP. Puede unir también detecciones
+   del mismo sensor y no une las que caen en celdas vecinas.
+4. Los datos más recientes provienen de productos de casi tiempo real (NRT),
+   que pueden cambiar cuando se publique la versión estándar.
+
+**Límites que hay que tener presentes**
+- Un foco de calor NO es un incendio confirmado: puede ser una quema agrícola,
+  una fuente industrial u otra anomalía térmica.
+- MODIS y VIIRS no son comparables en cantidad: VIIRS tiene mayor resolución.
+- Las "señales de origen" son reglas simples, no la causa real.
+- Los años o meses sin datos de algún sensor no significan ausencia de actividad.
+- Las quemas declaradas dependen de que se carguen avisos oficiales con fuente.
+""")
+    st.caption("Texto científico a cargo de Luis; documentación de decisiones a cargo de A4.")
+
 with tab_datos:
     st.dataframe(df_f.head(5000))
     st.caption("Se muestran las primeras 5.000 filas.")
+    if st.button("Preparar descarga (hasta 200.000 filas más recientes)"):
+        csv = df_f.nlargest(200000, "fecha").to_csv(index=False).encode("utf-8")
+        st.download_button("Descargar CSV", csv, "focos_seleccion.csv", "text/csv")

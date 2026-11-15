@@ -94,12 +94,46 @@ def grafico_anual_zona(d):
 
 
 # ---------- Quemas declaradas ----------
-def cargar_quemas(ruta="data/quemas_autorizadas.csv"):
-    try:
-        return pd.read_csv(ruta, parse_dates=["fecha_inicio", "fecha_fin"])
-    except FileNotFoundError:
-        return pd.DataFrame(columns=COLS_QUEMAS)
+RUTA_DECLARADAS = "data/quemas_declaradas.csv"
+COLS_DECL = ["provincia", "lugar", "organizacion", "motivo", "fecha_inicio", "fecha_fin",
+             "latitud", "longitud", "radio_km", "fuente", "es_ejemplo", "estado",
+             "nombre", "rango", "permiso", "registrado_en"]
+COLS_PUBLICAS = ["provincia", "lugar", "organizacion", "motivo", "fecha_inicio",
+                 "fecha_fin", "radio_km", "estado"]
 
+
+def cargar_quemas(ruta="data/quemas_autorizadas.csv", ruta_decl=RUTA_DECLARADAS):
+    partes = []
+    for r in (ruta, ruta_decl):
+        try:
+            t = pd.read_csv(r, parse_dates=["fecha_inicio", "fecha_fin"])
+        except (FileNotFoundError, pd.errors.EmptyDataError):
+            continue
+        if len(t):
+            partes.append(t)
+    q = pd.concat(partes, ignore_index=True) if partes else pd.DataFrame()
+    q = q.reindex(columns=COLS_DECL)
+    q["es_ejemplo"] = q["es_ejemplo"].astype(str).str.lower().eq("true")
+    return q
+
+
+def guardar_quema(datos, ruta=RUTA_DECLARADAS):
+    from pathlib import Path
+    p = Path(ruta)
+    fila = pd.DataFrame([datos]).reindex(columns=COLS_DECL)
+    fila.to_csv(p, mode="a", header=not p.exists(), index=False, encoding="utf-8")
+
+
+def resumen_quemas(df, quemas):
+    """Tabla pública: sin nombre, rango ni permiso."""
+    filas = []
+    for _, q in quemas.iterrows():
+        sub = df[(df["fecha"] >= q["fecha_inicio"]) & (df["fecha"] <= q["fecha_fin"])]
+        n = len(detecciones_cercanas(sub, q["latitud"], q["longitud"], q["radio_km"])) if len(sub) else 0
+        fila = {c: q.get(c) for c in COLS_PUBLICAS}
+        fila["detecciones_en_zona"] = n
+        filas.append(fila)
+    return pd.DataFrame(filas)
 
 def marcar_quemas(cercanas, quemas):
     """True si la detección cae en el radio y las fechas de una quema declarada."""
@@ -110,16 +144,6 @@ def marcar_quemas(cercanas, quemas):
         d = distancia_km(c["latitud"].values, c["longitud"].values, q["latitud"], q["longitud"])
         c.loc[en_fecha & (d <= q["radio_km"]), "quema_autorizada"] = True
     return c
-
-
-def resumen_quemas(df, quemas):
-    filas = []
-    for _, q in quemas.iterrows():
-        sub = df[(df["fecha"] >= q["fecha_inicio"]) & (df["fecha"] <= q["fecha_fin"])]
-        n = len(detecciones_cercanas(sub, q["latitud"], q["longitud"], q["radio_km"])) if len(sub) else 0
-        filas.append({**q.to_dict(), "detecciones_en_zona": n})
-    return pd.DataFrame(filas)
-
 
 # ---------- Señales de origen (inferidas) ----------
 def grafico_senales(df):
@@ -175,3 +199,17 @@ def grafico_frp_mensual(df):
     return px.bar(c, x="mes", y="frp", color="sensor", barmode="group",
                   title="Intensidad térmica acumulada por mes (suma de FRP)",
                   labels={"mes": "", "frp": "Suma de FRP (MW)"})
+
+def grafico_densidad_provincias(df, sup):
+    c = df.groupby("provincia", observed=True).size().reset_index(name="n")
+    c["provincia"] = c["provincia"].astype(str)
+    c = c.merge(sup, on="provincia", how="inner")
+    c["por_1000km2"] = c["n"] / c["km2"] * 1000
+    c = c.sort_values("por_1000km2")
+    return px.bar(
+        c, x="por_1000km2", y="provincia", orientation="h",
+        hover_data={"n": ":,", "km2": ":,.0f"},
+        title="Detecciones cada 1.000 km² (comparable entre provincias)",
+        labels={"por_1000km2": "Detecciones por 1.000 km²", "provincia": ""},
+        height=max(350, 24 * len(c)),
+    )
