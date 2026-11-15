@@ -434,12 +434,14 @@ with tab_cerca:
 with tab_origen:
     st.subheader(t("or_sub"))
     st.warning(t("or_warn"))
-    if (df_f["senal"].astype(str) == "Sin dato").all():
+    if (df_f["senal"] == "Sin dato").all():
         st.info(t("or_falta"))
     else:
         st.plotly_chart(grafico_senales(df_f), use_container_width=True)
-        tot = (df_f["senal"].astype(str).map(senal_txt).value_counts()
-               .rename_axis(t("col_senal")).reset_index(name=t("col_det")))
+        vc = df_f["senal"].value_counts()
+        vc = vc[vc > 0]
+        tot = pd.DataFrame({t("col_senal"): [senal_txt(x) for x in vc.index],
+                            t("col_det"): vc.values})
         st.dataframe(tot, hide_index=True)
         muestra = df_f.sample(min(len(df_f), 20000), random_state=1)
         muestra = muestra.assign(senal=muestra["senal"].astype(str).map(senal_txt))
