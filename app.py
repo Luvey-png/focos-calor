@@ -19,6 +19,7 @@ import asistente as ia
 from idioma import (
     t, selector_idioma, region_txt, num, formato_fecha, fecha_txt, senal_txt, motivo_txt, valid_txt,
 )
+import ia_idioma
 
 st.set_page_config(
     page_title=f"{NOMBRE} · Focos de calor",
@@ -216,16 +217,20 @@ with tab_ia:
     datos_ia = contexto_ia(_h, df, tuple(provincias), desde, hasta, _tprov, _tlug, _val, _version)
     proveedor, clave_ia, modelo_ia = ia.configuracion(st.secrets)
 
-    if "chat" not in st.session_state:
+    EN = st.session_state.get("idioma", "en") == "en"
+    # al cambiar de idioma se vacía la conversación (para no mezclar idiomas)
+    if st.session_state.get("chat_idioma") != EN or "chat" not in st.session_state:
         st.session_state.chat = []
+        st.session_state.chat_idioma = EN
 
     if proveedor is None:
         st.warning(t("ia_sin_ia"))
         st.markdown(ia.resumen_sin_ia(_h, df, provincias, desde, hasta, _tprov))
     else:
-        cols = st.columns(len(ia.PREGUNTAS_EJEMPLO) + 1)
+        ejemplos = ia_idioma.EJEMPLOS_EN if EN else ia.PREGUNTAS_EJEMPLO
+        cols = st.columns(len(ejemplos) + 1)
         pedido = None
-        for i, q in enumerate(ia.PREGUNTAS_EJEMPLO):
+        for i, q in enumerate(ejemplos):
             if cols[i].button(q, key=f"ej_{i}", use_container_width=True):
                 pedido = q
         if cols[-1].button(t("ia_informe"), use_container_width=True):
@@ -244,8 +249,9 @@ with tab_ia:
             with st.chat_message("assistant"):
                 with st.spinner(t("ia_spinner")):
                     try:
-                        resp = ia.responder(pregunta, st.session_state.chat, datos_ia,
-                                            proveedor, clave_ia, modelo_ia)
+                        resp = ia_idioma.responder(
+                            pregunta, st.session_state.chat, datos_ia,
+                            proveedor, clave_ia, modelo_ia, en=EN)
                     except Exception as e:
                         resp = None
                         detalle = ""
