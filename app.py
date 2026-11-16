@@ -20,6 +20,7 @@ from idioma import (
     t, selector_idioma, region_txt, num, formato_fecha, fecha_txt, senal_txt, motivo_txt, valid_txt,
 )
 import ia_idioma
+from gases import vista_gases
 
 st.set_page_config(
     page_title=f"{NOMBRE} · Focos de calor",
@@ -556,7 +557,7 @@ with tab_metodo:
     st.caption(t("m_cap"))
 
 with tab_gases:
-    st.info(t("gases_info"))
+    vista_gases()
 
 with tab_datos:
     st.dataframe(df_f.head(5000))
