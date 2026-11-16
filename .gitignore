@@ -9,3 +9,4 @@ data/quemas_declaradas.csv
 .streamlit/secrets.py
 probar_ia.py
 probar_red.py
+data/gfas_arg_SERIE_MENSUAL_2003-2026.parquet
